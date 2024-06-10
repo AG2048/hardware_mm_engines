@@ -10,15 +10,10 @@
   `define VL_RD
 `endif
 
-module common_params;
-  localparam int DATA_WIDTH = 8;
-  localparam int N = 4;
-endmodule
-
 // Define
 module processing_unit #(
-  parameter int DATA_WIDTH `VL_RD = common_params::DATA_WIDTH,
-  parameter int N `VL_RD = common_params::N,
+  parameter int DATA_WIDTH `VL_RD = 8,
+  parameter int N `VL_RD = 4,
   parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N)
 ) (
   input                           clk_i,
@@ -36,7 +31,7 @@ module processing_unit #(
   assign result_calc = north_i * west_i + result_reg;
 
   logic [DATA_WIDTH-1:0] north_i_reg;
-  logic [DATA_WIDTH-1:0] west_i_reg,
+  logic [DATA_WIDTH-1:0] west_i_reg;
   assign south_o = north_i_reg;
   assign east_o = west_i_reg;
 
@@ -56,8 +51,8 @@ module processing_unit #(
 endmodule
 
 module sum_stationary #(
-  parameter int DATA_WIDTH `VL_RD = common_params::DATA_WIDTH,  // using 8-bit integers 
-  parameter int N `VL_RD = common_params::N; // Computing NxN matrix multiplications
+  parameter int DATA_WIDTH `VL_RD = 8,  // using 8-bit integers 
+  parameter int N `VL_RD = 4, // Computing NxN matrix multiplications
   parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N)
 ) (
   input                           clk_i, 
@@ -103,60 +98,62 @@ module sum_stationary #(
   // Define shift registers
   logic [DATA_WIDTH-1:0] west_shift_reg [N-1:1][]; // have registers except to left corner
   generate
-      genvar i;
-      for (i = 1; i < N; i++) begin : shift_reg_gen
+      genvar i1;
+      for (i1 = 1; i1 < N; i1++) begin : shift_reg_gen_west
           // Declare each shift_registers with a specific length
-          logic [DATA_WIDTH-1:0] shift_reg_i [i-1:0]; // each has length 1,2,3,...,N-1
-          
+          logic [DATA_WIDTH-1:0] shift_reg_i [i1-1:0]; // each has length 1,2,3,...,N-1
+
           // Implement shift register functionality
           always_ff @(posedge clk_i) begin
               if (reset_i) begin
                   // Reset the shift register
-                  for (j = 0; j < i; j++) begin
-                      shift_reg_i[j] <= {DATA_WIDTH{1'b0}};
+                  for (int j1 = 0; j1 < i1; j1++) begin
+                      shift_reg_i[j1] <= {DATA_WIDTH{1'b0}};
                   end
               end else begin
                   if (enable) begin
-                    // Shift register operation
-                    for (j = i-1; j > 0; j--) begin
-                        shift_reg_i[j] <= shift_reg_i[j-1];
-                    end
-                    shift_reg_i[0] <= a_i[i]; // Shift in the input
+                      // Shift register operation
+                      for (int j1 = i1-1; j1 > 0; j1--) begin
+                          shift_reg_i[j1] <= shift_reg_i[j1-1];
+                      end
+                      shift_reg_i[0] <= a_i[i1]; // Shift in the input
                   end
               end
           end
-          assign west_shift_reg[i] = shift_reg_i; // Assign internal shift register to the array
-          assign west_inputs[i] = shift_reg_i[i-1]; // Connect the output
+          assign west_shift_reg[i1] = shift_reg_i; // Assign internal shift register to the array
+          assign west_inputs[i1] = shift_reg_i[i1-1]; // Connect the output
       end
   endgenerate
+
   logic [DATA_WIDTH-1:0] north_shift_reg [N-1:1][]; // have registers except to left corner
   generate
-      genvar i;
-      for (i = 1; i < N; i++) begin : shift_reg_gen
+      genvar i2;
+      for (i2 = 1; i2 < N; i2++) begin : shift_reg_gen_north
           // Declare each shift_registers with a specific length
-          logic [DATA_WIDTH-1:0] shift_reg_i [i-1:0]; // each has length 1,2,3,...,N-1
-          
+          logic [DATA_WIDTH-1:0] shift_reg_i [i2-1:0]; // each has length 1,2,3,...,N-1
+
           // Implement shift register functionality
           always_ff @(posedge clk_i) begin
               if (reset_i) begin
                   // Reset the shift register
-                  for (j = 0; j < i; j++) begin
-                      shift_reg_i[j] <= {DATA_WIDTH{1'b0}};
+                  for (int j2 = 0; j2 < i2; j2++) begin
+                      shift_reg_i[j2] <= {DATA_WIDTH{1'b0}};
                   end
               end else begin
                   if (enable) begin
-                    // Shift register operation
-                    for (j = i-1; j > 0; j--) begin
-                        shift_reg_i[j] <= shift_reg_i[j-1];
-                    end
-                    shift_reg_i[0] <= b_i[i]; // Shift in the input
+                      // Shift register operation
+                      for (int j2 = i2-1; j2 > 0; j2--) begin
+                          shift_reg_i[j2] <= shift_reg_i[j2-1];
+                      end
+                      shift_reg_i[0] <= b_i[i2]; // Shift in the input
                   end
               end
           end
-          assign north_shift_reg[i] = shift_reg_i; // Assign internal shift register to the array
-          assign north_inputs[i] = shift_reg_i[i-1]; // Connect the output
+          assign north_shift_reg[i2] = shift_reg_i; // Assign internal shift register to the array
+          assign north_inputs[i2] = shift_reg_i[i2-1]; // Connect the output
       end
   endgenerate
+
 
   // Define NxN array of processing units
   logic [DATA_WIDTH-1:0] horizontal_interconnect[N:0][N:1]; // The input the i,j th unit will get from west, last is not used
@@ -176,7 +173,7 @@ module sum_stationary #(
         .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
         .south_o(vertical_interconnect[i+1][j]),
         .east_o(horizontal_interconnect[i][j+1]),
-        .result_o(c_o[i*N+j]);
+        .result_o(c_o[i*N+j])
         );
       end
     end

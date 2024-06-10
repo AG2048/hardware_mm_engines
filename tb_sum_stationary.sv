@@ -1,4 +1,4 @@
-`include "sum_stationary.v"
+`include "sum_stationary.sv"
 `default_nettype none
 
 module tb_sum_stationary;
