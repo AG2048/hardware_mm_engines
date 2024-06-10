@@ -79,11 +79,19 @@ module matrix_multiplier #(
   */
 
   // Define valid signal
-  
+  logic [$clog2(3*N-1)-1:0] counter;
+  always_ff @(posedge clk_i) begin
+    if (reset_i) begin
+      counter <= 3 * N - 2;
+    end else if (valid_i && ~valid_o) begin
+      counter <= counter - 1;
+    end
+  end
+  assign valid_o = counter == 0;
 
   // Define enable signal
   logic enable;
-  assign enable = valid_i; // Currently enable is just valid_i
+  assign enable = valid_i && ~valid_o; // Currently enable is just valid_i and not valid o
 
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];
@@ -164,47 +172,9 @@ module matrix_multiplier #(
         .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
         .south_o(vertical_interconnect[i+1][j]),
         .east_o(horizontal_interconnect[i][j+1]),
-        .result_o(c_o[i*N + j]);
+        .result_o(c_o[i*N+j]);
         );
       end
     end
   endgenerate
-  
-
-
-
-
-  // C calculation uses C_DATA_WIDTH, each corresponding to output size
-  logic [C_DATA_WIDTH-1:0] c_calc[A_ROWS * B_COLUMNS];
-
-  // Combinational Logic for multiplying (this has a long data path)
-  always @(*) begin : multiply
-    logic [C_DATA_WIDTH-1:0] c_element;
-    for (int i = 0; i < A_ROWS; i = i + 1) begin : C_ROWS
-      for (int j = 0; j < B_COLUMNS; j = j + 1) begin : C_COLUMNS
-        c_element = 0;
-        for (int k = 0; k < A_COLUMNS_B_ROWS; k = k + 1) begin : DOT_PRODUCT
-          c_element = c_element + (a_i[(i * A_COLUMNS_B_ROWS) + k] * b_i[(k * B_COLUMNS) + j]);
-        end
-        c_calc[(i * B_COLUMNS) + j] = c_element;
-      end
-    end
-  end
-
-  always @(posedge clk_i) begin : proc_reg
-    if (reset_i) begin
-      valid_o <= 1'b0;
-
-      for (int idx = 0; idx < (A_ROWS * B_COLUMNS); idx++) begin
-        c_o[idx] <= '0;
-      end
-    end else begin
-      valid_o <= valid_i;  // Due to the "hard-wired" nature, output is valid always when input is valid (but it really depends on data length)
-      // Considering that input may be given at the "end" of a clock cycle, while data path may take longer
-
-      for (int idx = 0; idx < (A_ROWS * B_COLUMNS); idx++) begin
-        c_o[idx] <= c_calc[idx];
-      end
-    end
-  end
 endmodule
