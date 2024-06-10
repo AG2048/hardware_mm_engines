@@ -91,7 +91,7 @@ module matrix_multiplier #(
 
   // Define enable signal
   logic enable;
-  assign enable = valid_i && ~valid_o; // Currently enable is just valid_i and not valid o
+  assign enable = valid_i || (counter <= 2 * N - 2) && ~valid_o; // enable to propagate data when: input valid, input filled, output not valid. 
 
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];
