@@ -3,21 +3,14 @@
 
 // Matrix Multiplier DUT
 `timescale 1ns/1ps
-
-`ifdef VERILATOR  // make parameter readable from VPI
-  `define VL_RD /*verilator public_flat_rd*/
-`else
-  `define VL_RD
-`endif
-
-module matrix_multiplier #(
-  parameter int DATA_WIDTH `VL_RD = 8,  // using 8-bit integers 
-  parameter int A_ROWS `VL_RD = 8,
-  parameter int B_COLUMNS `VL_RD = 5,
-  parameter int A_COLUMNS_B_ROWS `VL_RD = 4,  // These define an 8x5 * 5x4 matrix
+module hard_coded #(
+  parameter int DATA_WIDTH = 8,  // using 8-bit integers 
+  parameter int A_ROWS = 4,
+  parameter int B_COLUMNS = 4,
+  parameter int A_COLUMNS_B_ROWS = 4,  // These define an 4x4 * 4x4 matrix
   parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(A_COLUMNS_B_ROWS)
 ) (
-  input                           clk_i, 
+  input                           clk, 
   input                           reset_i,
   input                           valid_i,
   output logic                    valid_o,
@@ -42,7 +35,7 @@ module matrix_multiplier #(
     end
   end
 
-  always @(posedge clk_i) begin : proc_reg
+  always @(posedge clk) begin : proc_reg
     if (reset_i) begin
       valid_o <= 1'b0;
 
@@ -58,29 +51,5 @@ module matrix_multiplier #(
       end
     end
   end
-
-  // Dump waves
-`ifndef VERILATOR
-  initial begin
-    integer idx;
-    $dumpfile("dump.vcd");
-    $dumpvars(1, matrix_multiplier);
-  `ifdef __ICARUS__
-      for (idx = 0; idx < (A_ROWS * A_COLUMNS_B_ROWS); idx++) begin
-        $dumpvars(1, a_i[idx]);
-      end
-      for (idx = 0; idx < (A_COLUMNS_B_ROWS * B_COLUMNS); idx++) begin
-        $dumpvars(1, b_i[idx]);
-      end
-      for (idx = 0; idx < (A_ROWS * B_COLUMNS); idx++) begin
-        $dumpvars(1, c_o[idx]);
-      end
-  `else
-    $dumpvars(1, a_i);
-    $dumpvars(1, b_i);
-    $dumpvars(1, c_o);
-  `endif
-  end
-`endif
 
 endmodule
