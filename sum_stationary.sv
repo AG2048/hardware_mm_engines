@@ -17,7 +17,8 @@ endmodule
 
 // Define
 module processing_unit #(
-  parameter int DATA_WIDTH `VL_RD = common_params::DATA_WIDTH
+  parameter int DATA_WIDTH `VL_RD = common_params::DATA_WIDTH,
+  parameter int N `VL_RD = common_params::N,
   parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N)
 ) (
   input                           clk_i,
@@ -54,7 +55,7 @@ module processing_unit #(
   end
 endmodule
 
-module matrix_multiplier #(
+module sum_stationary #(
   parameter int DATA_WIDTH `VL_RD = common_params::DATA_WIDTH,  // using 8-bit integers 
   parameter int N `VL_RD = common_params::N; // Computing NxN matrix multiplications
   parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N)
@@ -164,7 +165,10 @@ module matrix_multiplier #(
     genvar i, j;
     for (i = 0; i < N; i++) begin : row
       for (j = 0; j < N; j++) begin : col
-        processing_unit u_processing_unit (
+        processing_unit #(
+          .DATA_WIDTH(DATA_WIDTH),
+          .N(N)
+        ) u_processing_unit (
         .clk_i(clk_i),
         .enable_i(enable),
         .reset_i(reset_i),
