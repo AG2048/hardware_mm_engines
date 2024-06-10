@@ -29,6 +29,7 @@ module processing_unit #(
   logic [C_DATA_WIDTH-1:0] result_reg;
 
   assign result_calc = north_i * west_i + result_reg;
+  assign result_o = result_reg;
 
   logic [DATA_WIDTH-1:0] north_i_reg;
   logic [DATA_WIDTH-1:0] west_i_reg;
@@ -79,7 +80,7 @@ module sum_stationary #(
   always_ff @(posedge clk_i) begin
     if (reset_i) begin
       counter <= 3 * N - 2;
-    end else if (valid_i && ~valid_o) begin
+    end else if (valid_i || (counter <= 2 * N - 2) && ~valid_o) begin
       counter <= counter - 1;
     end
   end
@@ -92,8 +93,8 @@ module sum_stationary #(
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];
   logic [DATA_WIDTH-1:0] west_inputs [N-1:0];
-  assign west_inputs[0] = a_i[0];
-  assign north_inputs[0] = b_i[0];
+  assign west_inputs[0] = valid_i ? a_i[0] : '0;
+  assign north_inputs[0] = valid_i ? b_i[0] : '0;
 
   // Define shift registers
   logic [DATA_WIDTH-1:0] west_shift_reg [N-1:1][]; // have registers except to left corner
@@ -116,7 +117,7 @@ module sum_stationary #(
                       for (int j1 = i1-1; j1 > 0; j1--) begin
                           shift_reg_i[j1] <= shift_reg_i[j1-1];
                       end
-                      shift_reg_i[0] <= a_i[i1]; // Shift in the input
+                      shift_reg_i[0] <= valid_i ? a_i[i1] : '0; // Shift in the input
                   end
               end
           end
@@ -145,7 +146,7 @@ module sum_stationary #(
                       for (int j2 = i2-1; j2 > 0; j2--) begin
                           shift_reg_i[j2] <= shift_reg_i[j2-1];
                       end
-                      shift_reg_i[0] <= b_i[i2]; // Shift in the input
+                      shift_reg_i[0] <= valid_i ? b_i[i2] : '0; // Shift in the input
                   end
               end
           end
