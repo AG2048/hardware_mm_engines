@@ -90,6 +90,7 @@ module sum_stationary #(
   endgenerate
 endmodule
 
+// Takes 2 values input. Multiply them and accumulate to old results. Stores the input and outputs them next cycle if enable.
 module processing_unit #(
   parameter int DATA_WIDTH = 8,
   parameter int N = 4,
@@ -130,6 +131,7 @@ module processing_unit #(
   end
 endmodule
 
+// Takes a row / col input from a matrix, and delay its input into the actual processing unit for systolic array
 module input_delay_register #(
   parameter int DATA_WIDTH = 8,
   parameter int N = 4
