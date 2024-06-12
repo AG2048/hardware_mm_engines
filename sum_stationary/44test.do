@@ -4,9 +4,7 @@ vlib work
 # compile all system verilog modules in mux.sv to working dir
 # could also have multiple verilog files
 vlog sum_stationary.sv
-
-#load simulation using mux as the top level simulation module
-vsim sum_stationary +N=4
+vsim -gN=4 work.sum_stationary
 
 #log all signals and add some signals to waveform window
 log {/*}
