@@ -11,7 +11,7 @@ module sum_stationary #(
   output logic                    valid_o,  // Output is valid when all data is passed through
   input        [DATA_WIDTH-1:0]   a_i[N-1:0],
   input        [DATA_WIDTH-1:0]   b_i[N-1:0],
-  output logic [C_DATA_WIDTH-1:0] c_o[N*N-1:0]
+  output logic [C_DATA_WIDTH-1:0] c_o[N][N]
 );
   /*
   define "shift registers" that only gets triggered when enabled (size ranging from 0 to N-1)
@@ -83,7 +83,7 @@ module sum_stationary #(
         .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
         .south_o(vertical_interconnect[i+1][j]),
         .east_o(horizontal_interconnect[i][j+1]),
-        .result_o(c_o[i*N+j])
+        .result_o(c_o[i][j])
         );
       end
     end
