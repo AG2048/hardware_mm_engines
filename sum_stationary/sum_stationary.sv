@@ -177,7 +177,10 @@ endmodule
 
 // Wired to the registers array for 2D matrix output. When values are calculated and if the secondary registers storage is empty:
 // Move all data to this secondary matrix and output data. 
+// TODO: change "valid_o" to result_calculated_valid or something
 // TODO: device should clear its own "results" registers once value is shifted out. Should not take any new inputs unless results registers is shifted out
 // TODO: I guess have a flag register for (result_empty) and hook that to input ready.
 // TODO: when result is ready (counter went to 0) and output registers is empty, CLEAR EVERYTHING (essentially same as a "rst" signal)
 // TODO: but this "rst" signal does not clear the output registers. (I guess I can just modify each submodule's "rst" to become: (rst || (count==0 && output_empty))
+// Input: NxN array, full signal (which is count == 0 && output_empty, or result_calculated_valid && output_empty), output_ready, out_by_row, reset, clock
+// Output: a Row/col output of length N, output_empty, output_valid
