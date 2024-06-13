@@ -157,14 +157,12 @@ module input_delay_register #(
           for (int j = 0; j < i; j++) begin
             shift_reg_i[j] <= {DATA_WIDTH{1'b0}};
           end
-        end else begin
-          if (enable) begin
-            // Shift register operation
-            for (int j = i-1; j > 0; j--) begin
-              shift_reg_i[j] <= shift_reg_i[j-1];
-            end
-            shift_reg_i[0] <= input_valid ? data_i[i] : '0; // Shift in the input
+        end else if (enable) begin
+          // Shift register operation
+          for (int j = i-1; j > 0; j--) begin
+            shift_reg_i[j] <= shift_reg_i[j-1];
           end
+          shift_reg_i[0] <= input_valid ? data_i[i] : '0; // Shift in the input
         end
       end
       assign shift_reg[i][i-1:0] = shift_reg_i; // Assign internal shift register to the array
@@ -172,16 +170,6 @@ module input_delay_register #(
     end
   endgenerate
 endmodule
-
-// Wired to the registers array for 2D matrix output. When values are calculated and if the secondary registers storage is empty:
-// Move all data to this secondary matrix and output data. 
-// TODO: change "output_valid" to result_calculated_valid or something
-// TODO: device should clear its own "results" registers once value is shifted out. Should not take any new inputs unless results registers is shifted out
-// TODO: I guess have a flag register for (result_empty) and hook that to input ready.
-// TODO: when result is ready (counter went to 0) and output registers is empty, CLEAR EVERYTHING (essentially same as a "rst" signal)
-// TODO: but this "rst" signal does not clear the output registers. (I guess I can just modify each submodule's "rst" to become: (rst || (count==0 && output_empty))
-// Input: NxN array, full signal (which is count == 0 && output_empty, or result_valid && output_empty), output_ready, out_by_row, reset, clock
-// Output: a Row/col output of length N, output_empty, output_valid
 
 module output_streaming_registers #(
   parameter int N = 4, // Computing NxN matrix multiplications
@@ -223,10 +211,34 @@ module output_streaming_registers #(
   end
 
   // Define Registers -- Has a 2D load, and shift with MUX-decided directions (left or up)
-  logic [DATA_WIDTH-1:0] output_registers [N][N]; // N by N registers
+  logic [C_DATA_WIDTH-1:0] output_registers [N][N]; // N by N registers
   generate
     genvar i, j;
-    
+    for (i = 0; i < N; i++) begin
+      for (j = 0; j < N; j++) begin
+        always_ff @(posedge clk) begin
+          if (reset) begin
+            output_registers[i][j] <= 0;
+          end else if (result_valid && !output_valid) begin
+            output_registers[i][j] <= c_data[i][j];
+          end else if (output_valid && output_ready) begin
+            output_registers[i][j] <= output_by_row_wire ? (i < N-1 ? output_registers[i+1][j] : 0) : (j < N-1 ? output_registers[i][j+1] : 0);
+          end
+        end
+      end
+    end
   endgenerate
 
+  // Output is first row or col of the output registers:
+  always_comb begin
+    if (output_by_row_wire) begin
+      for (int j = 0; j < N; j++) begin
+        output_data[j] = output_registers[0][j];
+      end
+    end else begin
+      for (int i = 0; i < N; i++) begin
+        output_data[i] = output_registers[i][0];
+      end
+    end
+  end
 endmodule
