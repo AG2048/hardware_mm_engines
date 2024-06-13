@@ -182,3 +182,51 @@ endmodule
 // TODO: but this "rst" signal does not clear the output registers. (I guess I can just modify each submodule's "rst" to become: (rst || (count==0 && output_empty))
 // Input: NxN array, full signal (which is count == 0 && output_empty, or result_valid && output_empty), output_ready, out_by_row, reset, clock
 // Output: a Row/col output of length N, output_empty, output_valid
+
+module output_streaming_registers #(
+  parameter int N = 4, // Computing NxN matrix multiplications
+  parameter int C_DATA_WIDTH = 18
+) (
+  input                           clk, 
+  input                           reset,
+  input                           result_valid,   // From processing unit, informing if data is ready to be stored and streamed out
+  input                           output_by_row,  // Along with first ready signal after output valid, indicates direction of output (only first one matters). 1 for row by row output, 0 for col by col output
+  input                           output_ready,   // Informs that recipient is ready to receive data
+  output logic                    output_valid,   // Output is valid the moment data is loaded into stream registers (data remains in registers) (also tells)
+  input        [C_DATA_WIDTH-1:0] c_data[N][N],   // The result NxN matrix
+  output logic [C_DATA_WIDTH-1:0] output_data[N]  // Row of output streamed out
+);
+  // Define valid signal -- using counter
+  logic [$clog2(N+1)-1:0] counter;  // Output shifts at most N times
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      counter <= 0;  // 0 indicate output streaming registers are empty
+    end else if (result_valid && !output_valid) begin  // reset counter when result valid and output registers are empty
+      counter <= N;
+      // The first clock edge when valid and ready are read, counter == N at the edge
+    end else if (output_valid && output_ready) begin  // count down when something is in counter and being read. 
+      counter <= counter - 1; 
+    end
+  end
+  assign output_valid = counter != 0;  // Output is valid when there's something (not all data is shifted out)
+
+  // Row or column -- register for long-term storage, and a wire for "first time"
+  logic output_by_row_register;
+  logic output_by_row_wire;
+  assign output_by_row_wire = counter == N ? output_by_row : output_by_row_register;  // First time use input, onward use register
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      output_by_row_register <= 0;
+    end else if (output_valid && output_ready && counter == N) begin  // First (counter==N) valid and ready, read in the instruction
+      output_by_row_register <= output_by_row;
+    end
+  end
+
+  // Define Registers -- Has a 2D load, and shift with MUX-decided directions (left or up)
+  logic [DATA_WIDTH-1:0] output_registers [N][N]; // N by N registers
+  generate
+    genvar i, j;
+    
+  endgenerate
+
+endmodule
