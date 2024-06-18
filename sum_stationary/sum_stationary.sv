@@ -8,26 +8,32 @@ module sum_stationary #(
   input                           clk,            // Clock signal
   input                           reset,          // Reset signal
   input                           input_valid,    // External input to module is correct/valid
+  input                           output_ready,   // External device is ready to receive output
+  output                          input_ready,    // Device ready to receive input
   output logic                    output_valid,   // Output is valid when all data is passed through
+  input logic                     output_by_row,  // Indicate if output should be done row wise or col wise
   input        [DATA_WIDTH-1:0]   a_data[N-1:0],  // Column inputs of A (right to left)
   input        [DATA_WIDTH-1:0]   b_data[N-1:0],  // Row inputs of B (bottom to top)
-  output logic [C_DATA_WIDTH-1:0] c_data[N][N]    // Full matrix output of C
+  output logic [C_DATA_WIDTH-1:0] c_data_streaming[N]    // Streaming data output of C
 );
 
   // Define valid signal
   logic [$clog2(3*N-1)-1:0] counter;  // Program executes in set number of cycles, count number of cycles
   always_ff @(posedge clk) begin
-    if (reset) begin
+    if (reset || (result_valid && !output_valid)) begin
       counter <= 3 * N - 2;  // N-1 to shift data onto registers, N-1 to pass data through registers, N to compute
-    end else if ((input_valid || (counter <= 2 * N - 2)) && ~output_valid) begin  // Only count when data being input, OR all data is now in registers. Never when output_valid
+    end else if (enable) begin  // Only count when data being input, OR all data is now in registers. Never when output_valid
       counter <= counter - 1;
     end
   end
-  assign output_valid = counter == 0;
+  assign result_valid = counter == 0;
 
-  // Define enable signal
+  // Define enable signal -- shift data in registers and inside the systolic array
   logic enable;  // Tells units when to send data to next unit / register
-  assign enable = (input_valid || (counter <= 2 * N - 2)) && ~output_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  assign enable = (input_valid || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+
+  // Define input ready -- can input when counter is > 2*N-2
+  assign input_ready = counter > 2 * N - 2;
 
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];  // North Inputs have N inputs (B's row)
@@ -37,7 +43,7 @@ module sum_stationary #(
     .N(N)
   ) west_delay_register (
     .clk(clk),
-    .reset(reset),
+    .reset(reset || (result_valid && !output_valid)),
     .input_valid(input_valid),
     .enable(enable),
     .data_i(a_data[N-1:0]),
@@ -48,7 +54,7 @@ module sum_stationary #(
     .N(N)
   ) north_delay_register(
     .clk(clk),
-    .reset(reset),
+    .reset(reset || (result_valid && !output_valid)),
     .input_valid(input_valid),
     .enable(enable),
     .data_i(b_data[N-1:0]),
@@ -58,6 +64,8 @@ module sum_stationary #(
   // Define NxN array of processing units
   logic [DATA_WIDTH-1:0] horizontal_interconnect[N:0][N:1]; // The input the i,j th unit will get from west, last is not used
   logic [DATA_WIDTH-1:0] vertical_interconnect[N:1][N:0]; // The input the i,j th unit will get from north, last is not used
+  logic [C_DATA_WIDTH-1:0] c_data[N-1:0][N-1:0] // Full computation of C to be buffered
+  logic 
   generate
     genvar i, j;
     for (i = 0; i < N; i++) begin : row
@@ -66,18 +74,33 @@ module sum_stationary #(
           .DATA_WIDTH(DATA_WIDTH),
           .N(N)
         ) u_processing_unit (
-        .clk(clk),
-        .enable(enable),
-        .reset(reset),
-        .west_i((j == 0) ? west_inputs[i] : horizontal_interconnect[i][j]),
-        .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
-        .south_o(vertical_interconnect[i+1][j]),
-        .east_o(horizontal_interconnect[i][j+1]),
-        .result_o(c_data[i][j])
+          .clk(clk),
+          .enable(enable),
+          .reset(reset || (result_valid && !output_valid)),
+          .west_i((j == 0) ? west_inputs[i] : horizontal_interconnect[i][j]),
+          .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
+          .south_o(vertical_interconnect[i+1][j]),
+          .east_o(horizontal_interconnect[i][j+1]),
+          .result_o(c_data[i][j])
         );
       end
     end
   endgenerate
+
+  // Output streaming unit
+  output_streaming_registers #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .N(N)
+  ) u_output_streaming_registers (
+    .clk(clk),
+    .reset(reset),
+    .result_valid(result_valid),   
+    .output_by_row(output_by_row),  
+    .output_ready(output_ready),   
+    .output_valid(output_valid),   
+    .c_data(c_data),   
+    .output_data(c_data_streaming)
+  );
 endmodule
 
 // Takes 2 values input. Multiply them and accumulate to old results. Stores the input and outputs them next cycle if enable.
@@ -180,8 +203,8 @@ module output_streaming_registers #(
   input                           result_valid,   // From processing unit, informing if data is ready to be stored and streamed out
   input                           output_by_row,  // Along with first ready signal after output valid, indicates direction of output (only first one matters). 1 for row by row output, 0 for col by col output
   input                           output_ready,   // Informs that recipient is ready to receive data
-  output logic                    output_valid,   // Output is valid the moment data is loaded into stream registers (data remains in registers) (also tells)
-  input        [C_DATA_WIDTH-1:0] c_data[N][N],   // The result NxN matrix
+  output logic                    output_valid,   // Output is valid the moment data is loaded into stream registers (data remains in registers) (also tells if buffer is empty or not)
+  input        [C_DATA_WIDTH-1:0] c_data[N-1:0][N-1:0],   // The result NxN matrix
   output logic [C_DATA_WIDTH-1:0] output_data[N]  // Row of output streamed out
 );
   // Define valid signal -- using counter
