@@ -29,9 +29,8 @@ module sum_stationary #(
       // Store 3N-2 as default, value change when is_first_input AND input_valid
       counter <= 3 * N - 2;  // N-1 to shift data onto registers, N-1 to pass data through registers, N to compute
       is_first_input <= 1;
-      // TODO: add the correct value to counter on first cycle
     end else if (enable && is_first_input) begin  // First time count differently
-      counter <= 2*N-1 + len_input-1 - 1;
+      counter <= 2*N-1 + len_input-1 - 1;  // 2*N-1 to pass from beginning of shift register to the end. len_input-1 to reach the beginning of shift register. -1 because this is already the first cycle.
       is_first_input <= 0;
     end else if (enable) begin  // Only count when data being input, OR all data is now in registers. Never when output_valid
       counter <= counter - 1;
@@ -42,7 +41,7 @@ module sum_stationary #(
   assign enable = (input_valid || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
 
   // Define input ready -- can input when counter is > 2*N-2
-  assign input_ready = counter > 2 * N - 2;  // Note: input ready being false doesn't stop registers from taking data in. TODO
+  assign input_ready = counter > 2 * N - 2;  
   // TODO: for tight input, input ready can be just: if output buffer finished last output yet AND if our new input reached the state for data to be output (because this way we assume data is "tight")
 
   // Define input data to the unit matrix
