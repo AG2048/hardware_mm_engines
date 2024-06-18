@@ -8,7 +8,8 @@ module sum_stationary #(
 ) (
   input                           clk,            // Clock signal
   input                           reset,          // Reset signal
-  input                           input_valid,    // External input to module is correct/valid
+  input                           a_input_valid,    // External input to module is correct/valid
+  input                           b_input_valid,    // External input to module is correct/valid
   input                           output_ready,   // External device is ready to receive output
   output                          input_ready,    // Device ready to receive input
   output logic                    output_valid,   // Output is valid when all data is passed through
@@ -38,7 +39,7 @@ module sum_stationary #(
   end
 
   // Define enable signal -- shift data in registers and inside the systolic array
-  assign enable = (input_valid || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  assign enable = ((a_input_valid && b_input_valid) || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
 
   // Define input ready -- can input when counter is > 2*N-2
   assign input_ready = counter > 2 * N - 2;  
@@ -53,7 +54,7 @@ module sum_stationary #(
   ) west_delay_register (
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .input_valid(input_valid),
+    .input_valid(a_input_valid),
     .enable(enable),
     .data_i(a_data[N-1:0]),
     .data_o(west_inputs[N-1:0])
@@ -64,7 +65,7 @@ module sum_stationary #(
   ) north_delay_register(
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .input_valid(input_valid),
+    .input_valid(b_input_valid),
     .enable(enable),
     .data_i(b_data[N-1:0]),
     .data_o(north_inputs[N-1:0])
