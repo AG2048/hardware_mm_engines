@@ -13,7 +13,7 @@ module sum_stationary #(
   output                          input_ready,    // Device ready to receive input
   output logic                    output_valid,   // Output is valid when all data is passed through
   input logic                     output_by_row,  // Indicate if output should be done row wise or col wise
-  input        [COUNTER_BITS-1:0] len_input,      // Indicate how "wide" the multiplication is, along with first input_valid. TODO: how many bits should this have? (This should be enough for an N=32 len=4096 matrix)
+  input        [COUNTER_BITS-1:0] len_input,      // Indicate how "wide" the multiplication is, along with first input_valid. TODO: how many bits should this have? (16 bits should be enough for an N=32 len=4096 matrix)
   input        [DATA_WIDTH-1:0]   a_data[N-1:0],  // Column inputs of A (right to left)
   input        [DATA_WIDTH-1:0]   b_data[N-1:0],  // Row inputs of B (bottom to top)
   output logic [C_DATA_WIDTH-1:0] c_data_streaming[N]    // Streaming data output of C
