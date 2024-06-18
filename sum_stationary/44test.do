@@ -288,7 +288,7 @@ run 20ns
 force output_ready 1'b0
 force output_by_row 1'b0
 
-run 100ns
+run 50ns
 force output_ready 1'b1
 force output_by_row 1'b0
 
