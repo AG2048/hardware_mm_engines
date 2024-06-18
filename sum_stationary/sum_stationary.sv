@@ -42,7 +42,7 @@ module sum_stationary #(
   assign enable = ((a_input_valid && b_input_valid) || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
 
   // Define input ready -- can input when counter is > 2*N-2
-  assign input_ready = counter > 2 * N - 2;  
+  assign input_ready = (counter > 2 * N - 2) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
   // TODO: for tight input, input ready can be just: if output buffer finished last output yet AND if our new input reached the state for data to be output (because this way we assume data is "tight")
 
   // Define input data to the unit matrix
@@ -54,7 +54,7 @@ module sum_stationary #(
   ) west_delay_register (
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .input_valid(a_input_valid),
+    .input_valid(a_input_valid),  // Only 1 valid is needed because shifting data is dependent on enable, not input valid
     .enable(enable),
     .data_i(a_data[N-1:0]),
     .data_o(west_inputs[N-1:0])
