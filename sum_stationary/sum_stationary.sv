@@ -278,8 +278,8 @@ module output_streaming_registers #(
   logic [C_DATA_WIDTH-1:0] output_registers [N][N]; // N by N registers
   generate
     genvar i, j;
-    for (i = 0; i < N; i++) begin
-      for (j = 0; j < N; j++) begin
+    for (i = 0; i < N; i++) begin : output_buffer_i
+      for (j = 0; j < N; j++) begin : output_buffer_j
         always_ff @(posedge clk) begin
           if (reset) begin
             output_registers[i][j] <= 0;
