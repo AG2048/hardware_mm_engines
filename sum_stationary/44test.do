@@ -20,7 +20,8 @@ force -repeat 10ns clk 0 0ns, 1 5ns
 
 # Initialize signals
 force reset 1'b0
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h00
 force a_data(1) 8'h00
 force a_data(2) 8'h00
@@ -42,7 +43,8 @@ force reset 1'b0
 
 # Apply test vectors
 run 10ns
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force a_data(0) 8'h01
 force b_data(0) 8'h11
 force a_data(1) 8'h02
@@ -52,29 +54,33 @@ force b_data(2) 8'h13
 force a_data(3) 8'h04
 force b_data(3) 8'h14
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b1
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
 force a_data(3) 8'h88
-force b_data(0) 8'h88
-force b_data(1) 8'h88
-force b_data(2) 8'h88
-force b_data(3) 8'h88
+force b_data(0) 8'h15
+force b_data(1) 8'h16
+force b_data(2) 8'h17
+force b_data(3) 8'h18
+
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b1
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
 force a_data(3) 8'h88
-force b_data(0) 8'h88
-force b_data(1) 8'h88
-force b_data(2) 8'h88
-force b_data(3) 8'h88
+force b_data(0) 8'h15
+force b_data(1) 8'h16
+force b_data(2) 8'h17
+force b_data(3) 8'h18
 
 run 10ns
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force a_data(0) 8'h05
 force b_data(0) 8'h15
 force a_data(1) 8'h06
@@ -84,7 +90,8 @@ force b_data(2) 8'h17
 force a_data(3) 8'h08
 force b_data(3) 8'h18
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -95,7 +102,8 @@ force b_data(2) 8'h88
 force b_data(3) 8'h88
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -106,7 +114,8 @@ force b_data(2) 8'h88
 force b_data(3) 8'h88
 
 run 10ns
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force a_data(0) 8'h09
 force b_data(0) 8'h19
 force a_data(1) 8'h0A
@@ -127,7 +136,8 @@ force a_data(3) 8'h10
 force b_data(3) 8'h20
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -138,7 +148,8 @@ force b_data(2) 8'h88
 force b_data(3) 8'h88
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -149,7 +160,8 @@ force b_data(2) 8'h88
 force b_data(3) 8'h88
 
 run 10ns
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force a_data(0) 8'h01
 force b_data(0) 8'h11
 force a_data(1) 8'h02
@@ -160,14 +172,16 @@ force a_data(3) 8'h04
 force b_data(3) 8'h14
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 
 # Wait for the output to be valid
 run 70ns
 
 run 10ns
 
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 
 force a_data(0) 8'd64
 force a_data(1) 8'd65
@@ -182,7 +196,8 @@ force b_data(3) 8'd103
 
 run 10ns
 
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 
 force a_data(0) 8'd68
 force a_data(1) 8'd69
@@ -199,7 +214,8 @@ force output_by_row 1'b1
 
 run 10ns
 
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 
 force a_data(0) 8'd72
 force a_data(1) 8'd73
@@ -215,7 +231,8 @@ run 10ns
 force output_ready 1'b0
 force output_by_row 1'b0
 
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -225,7 +242,8 @@ force b_data(1) 8'h88
 force b_data(2) 8'h88
 force b_data(3) 8'h88
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
@@ -236,7 +254,8 @@ force b_data(2) 8'h88
 force b_data(3) 8'h88
 run 10ns
 
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 force output_ready 1'b1
 
 force a_data(0) 8'd76
@@ -252,7 +271,8 @@ force b_data(3) 8'd115
 
 run 10ns
 
-force input_valid 1'b1
+force a_input_valid 1'b1
+force b_input_valid 1'b1
 
 force a_data(0) 8'd80
 force a_data(1) 8'd81
@@ -268,13 +288,15 @@ force output_ready 1'b0
 force output_by_row 1'b0
 
 run 10ns
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 
 run 20ns
 force output_ready 1'b0
 force output_by_row 1'b0
 
-force input_valid 1'b0
+force a_input_valid 1'b0
+force b_input_valid 1'b0
 force a_data(0) 8'h88
 force a_data(1) 8'h88
 force a_data(2) 8'h88
