@@ -26,6 +26,7 @@
 
  /* Development Plan
   * Fix input or output ordering - try to make input order and output order the same
+  * Modify processing units to shorten the data path. 
   * MUX of the unit accepting register output OR data reusing? But this depends on how big the input is. 
   *   If it's a very wide matrix it can be bad - how to know how to size this data reuse?
   */
