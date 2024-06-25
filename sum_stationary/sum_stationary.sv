@@ -59,10 +59,10 @@ module sum_stationary #(
   always_ff @(posedge clk) begin
     if (reset || (result_valid && !output_valid)) begin
       // Store 3N-2 as default, value change when is_first_input AND input_valid
-      counter <= 3 * N - 2;  // N-1 to shift data onto registers, N-1 to pass data through registers, N to compute
+      counter <= 3 * N - 1;  // N-1 to shift data onto registers, N-1 to pass data through registers, N to compute
       is_first_input <= 1;
     end else if (enable && is_first_input) begin  // First time count differently
-      counter <= 2*N-1 + len_input-1 - 1;  // 2*N-1 to pass from beginning of shift register to the end. len_input-1 to reach the beginning of shift register. -1 because this is already the first cycle.
+      counter <= 2*N-1 + len_input-1;  // 2*N-1 to pass from beginning of shift register to the end. len_input-1 to reach the beginning of shift register. -1 because this is already the first cycle.
       is_first_input <= 0;
     end else if (enable) begin  // Only count when data being input, OR all data is now in registers. Never when output_valid
       counter <= counter - 1;
@@ -70,10 +70,10 @@ module sum_stationary #(
   end
 
   // Define enable signal -- shift data in registers and inside the systolic array
-  assign enable = ((a_input_valid && b_input_valid) || (counter <= 2 * N - 2)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  assign enable = ((a_input_valid && b_input_valid) || (counter <= 2 * N - 1)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
 
   // Define input ready -- can input when counter is > 2*N-2
-  assign input_ready = (counter > 2 * N - 2) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
+  assign input_ready = (counter > 2 * N - 1) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
   // TODO: for tight input, input ready can be just: if output buffer finished last output yet AND if our new input reached the state for data to be output (because this way we assume data is "tight")
 
   // Define input data to the unit matrix
@@ -147,7 +147,8 @@ endmodule
 module processing_unit #(
   parameter int DATA_WIDTH = 8,
   parameter int N = 4,
-  parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N)
+  parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N),
+  parameter int PRODUCT_WIDTH = (2 * DATA_WIDTH)
 ) (
   input                           clk,      // Clock signal
   input                           enable,   // Send data to next, and calculate result to store it
@@ -161,9 +162,15 @@ module processing_unit #(
   // Output is stored in result_reg, while calculation is in result_calc wire before storing
   logic [C_DATA_WIDTH-1:0] result_calc;
   logic [C_DATA_WIDTH-1:0] result_reg;
+  logic [PRODUCT_WIDTH-1:0] product_calc;
+  logic [PRODUCT_WIDTH-1:0] product_reg;
+
+  // Flag for product ready to be added with result reg
+  logic product_calculated;
 
   // Calculate result comb
-  assign result_calc = north_i * west_i + result_reg;
+  assign result_calc = product_reg + result_reg;
+  assign product_calc = north_i * west_i;
   // TODO: add a product_calc and a product_reg to improve clock cycle of the design. But may have to adjust how enable / counter works
 
   // Output is always result register
@@ -181,11 +188,19 @@ module processing_unit #(
       north_i_reg <= '0;
       west_i_reg <= '0;
       result_reg <= '0;
+      product_reg <= '0;
+      product_calculated <= '0;
     end else begin
       if (enable) begin
-        result_reg <= result_calc;
+        product_reg <= product_calc;
+        product_calculated <= '1;
         north_i_reg <= north_i;
         west_i_reg <= west_i;
+      end else begin
+        product_calculated <= '0;
+      end
+      if (product_calculated) begin
+        result_reg <= result_calc;
       end
     end
   end
