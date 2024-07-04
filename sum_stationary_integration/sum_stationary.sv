@@ -3,7 +3,7 @@ module sum_stationary #(
   parameter int N = 4,            // Computing NxN matrix multiplications
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
-  parameter int COUNTER_BITS = 16 // Assume we only need to count for 16 bits of counter value (65535)
+  parameter int COUNTER_BITS = $clog2(2 * N - 1 + 1) // We count from 2N-1 to 0
 ) (
   input                           clk,            // Clock signal
   input                           reset,          // Reset signal
@@ -13,7 +13,7 @@ module sum_stationary #(
   output                          input_ready,    // Device ready to receive input
   output logic                    output_valid,   // Output is valid when all data is passed through
   input logic                     output_by_row,  // Indicate if output should be done row wise or col wise
-  input        [COUNTER_BITS-1:0] len_input,      // Indicate how "wide" the multiplication is, along with first input_valid. TODO: how many bits should this have? (16 bits should be enough for an N=32 len=4096 matrix)
+  input                           last,           // Signal to indicate this input is the last one (only high with last data)
   input        [DATA_WIDTH-1:0]   a_data[N-1:0],  // Column inputs of A (right to left)
   input        [DATA_WIDTH-1:0]   b_data[N-1:0],  // Row inputs of B (bottom to top)
   output logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0] c_data_streaming[N]    // Streaming data output of C
@@ -21,28 +21,30 @@ module sum_stationary #(
 
   // Define result valid signal
   logic [COUNTER_BITS-1:0] counter;  // Program executes in set number of cycles, count number of cycles
-  logic is_first_input;  // Flag register recording if this is the first "result_valid"
   assign result_valid = counter == 0;  // Counter won't count down anymore (enable false) when result valid
   logic enable;
+  logic input_done; // record if the input is over and we just propagating data
   always_ff @(posedge clk) begin
     if (reset || (result_valid && !output_valid)) begin
-      // Store 3N-2 as default, value change when is_first_input AND input_valid
-      counter <= 3 * N - 1;  // N-1 to shift data onto registers, N-1 to pass data through registers, N to compute
-      is_first_input <= 1;
-    end else if (enable && is_first_input) begin  // First time count differently
-      counter <= 2*N-1 + len_input-1;  // 2*N-1 to pass from beginning of shift register to the end. len_input-1 to reach the beginning of shift register. -1 because this is already the first cycle.
-      is_first_input <= 0;
-    end else if (enable) begin  // Only count when data being input, OR all data is now in registers. Never when output_valid
+      // Reset or, we pushing result to output buffers
+      counter <= 2 * N - 1;  // N-1 to pass data through registers, N to compute
+      input_done <= 0;
+    end else if (input_done) begin
+      // Input is done, just decrease count and that's it
       counter <= counter - 1;
-    end
+    end else if (last && input_ready && a_input_valid && b_input_valid) begin  
+      // Last input is imposed, we begin countdown. Only count down after we sure data is in
+      counter <= counter - 1;
+      input_done <= 1;
+    end 
   end
 
   // Define enable signal -- shift data in registers and inside the systolic array
-  assign enable = ((a_input_valid && b_input_valid) || (counter <= 2 * N - 1)) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  assign enable = ((a_input_valid && b_input_valid && input_ready) || input_done) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  // I know this is a little repetitive, but this extra input_ready makes it clear
 
-  // Define input ready -- can input when counter is > 2*N-2
-  assign input_ready = (counter > 2 * N - 1) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
-  // TODO: for tight input, input ready can be just: if output buffer finished last output yet AND if our new input reached the state for data to be output (because this way we assume data is "tight")
+  // Define input ready -- we read input when input is not already done
+  assign input_ready = (!input_done) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
 
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];  // North Inputs have N inputs (B's row)
