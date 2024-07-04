@@ -1,7 +1,8 @@
 module sum_stationary #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
   parameter int N = 4,            // Computing NxN matrix multiplications
-  parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N),  // Compute max possible output bits
+  parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
+  parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
   parameter int COUNTER_BITS = 16 // Assume we only need to count for 16 bits of counter value (65535)
 ) (
   input                           clk,            // Clock signal
@@ -15,7 +16,7 @@ module sum_stationary #(
   input        [COUNTER_BITS-1:0] len_input,      // Indicate how "wide" the multiplication is, along with first input_valid. TODO: how many bits should this have? (16 bits should be enough for an N=32 len=4096 matrix)
   input        [DATA_WIDTH-1:0]   a_data[N-1:0],  // Column inputs of A (right to left)
   input        [DATA_WIDTH-1:0]   b_data[N-1:0],  // Row inputs of B (bottom to top)
-  output logic [C_DATA_WIDTH-1:0] c_data_streaming[N]    // Streaming data output of C
+  output logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0] c_data_streaming[N]    // Streaming data output of C
 );
 
   // Define result valid signal
@@ -80,6 +81,8 @@ module sum_stationary #(
         processing_unit #(
           .DATA_WIDTH(DATA_WIDTH),
           .N(N)
+          .MULTIPLY_DATA_WIDTH(MULTIPLY_DATA_WIDTH), 
+          .ACCUM_DATA_WIDTH(ACCUM_DATA_WIDTH), 
         ) u_processing_unit (
           .clk(clk),
           .enable(enable),
@@ -96,7 +99,7 @@ module sum_stationary #(
 
   // Output streaming unit
   output_streaming_registers #(
-    .C_DATA_WIDTH(C_DATA_WIDTH),
+    .C_DATA_WIDTH(MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH),
     .N(N)
   ) u_output_streaming_registers (
     .clk(clk),
@@ -114,8 +117,8 @@ endmodule
 module processing_unit #(
   parameter int DATA_WIDTH = 8,
   parameter int N = 4,
-  parameter int C_DATA_WIDTH = (2 * DATA_WIDTH) + $clog2(N),
-  parameter int PRODUCT_WIDTH = (2 * DATA_WIDTH)
+  parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, 
+  parameter int ACCUM_DATA_WIDTH = 16, 
 ) (
   input                           clk,      // Clock signal
   input                           enable,   // Send data to next, and calculate result to store it
@@ -124,13 +127,13 @@ module processing_unit #(
   input        [DATA_WIDTH-1:0]   north_i,  // North input
   output       [DATA_WIDTH-1:0]   south_o,  // South output
   output       [DATA_WIDTH-1:0]   east_o,   // East output
-  output logic [C_DATA_WIDTH-1:0] result_o  // Result output
+  output logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH-1:0] result_o  // Result output
 );
   // Output is stored in result_reg, while calculation is in result_calc wire before storing
-  logic [C_DATA_WIDTH-1:0] result_calc;
-  logic [C_DATA_WIDTH-1:0] result_reg;
-  logic [PRODUCT_WIDTH-1:0] product_calc;
-  logic [PRODUCT_WIDTH-1:0] product_reg;
+  logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH-1:0] result_calc;
+  logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH-1:0] result_reg;
+  logic [MULTIPLY_DATA_WIDTH-1:0] product_calc;
+  logic [MULTIPLY_DATA_WIDTH-1:0] product_reg;
 
   // Flag for product ready to be added with result reg
   logic product_calculated;
