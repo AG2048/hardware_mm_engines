@@ -1,36 +1,3 @@
-// Matrix Multiplier DUT
-
-/* Design Specification - Last Updated June 25
- * Inputs columns of A and rows of B sequantially by reverse order 
- *    (row N and col N input first) (but I guess this can be flipped if it's bad for future implementations)
- * Input ready to indicate when the CURRENT data is received and the device should start receiving new signals on next cycle
- *    (When both A and B inputs are valid, and we are not currently processing a previous matrix multiplication)
- * Data input as a row will be "delayed and shifted" by a shift register
- *    TODO (one option is to make the input to procesisng unit MUX'd with a flag of "reusing data") since if we reuse the 
- *     row output of one iteration again, there's no need to shift it again
- * Data propagates through the processing units
- *    North and west inputs are multiplied/accumulated/stored in the next edge. Original values are sent off to next unit.
- *    TODO (If we want tight input layout, we can program an "accept new" MUX to not let it clear but to latch in the new input)
- * Counter is used to determine current state of processing
- *    Start to be (2*N-1 + len_input-1), 2N-1 is cycle needed for result to reach from input to end. len_input-1 is needed to input all signals
- *    Before it reaches 2N-2, it's receiving new inputs.
- *    After it reaches 2N-2, all values should either be in registers on in the processing units, so we stop taking inputs
- *    When it reaches 0, result is valid.
- * When result valid: 
- *    Send data to output buffer and clear all contents. ONLY when output NOT VALID (output buffer is empty)
- *    TODO: consider splitting output_valid and an output_buffer_empty signal
- *    Reset count.
- * Output Buffer:
- *    Sends data out row by row or col by col based on the first OUTPUT_READY signal received when OUTPUT_VALID is first asserted. 
- */
-
- /* Development Plan
-  * Fix input or output ordering - try to make input order and output order the same
-  * Modify processing units to shorten the data path. 
-  * MUX of the unit accepting register output OR data reusing? But this depends on how big the input is. 
-  *   If it's a very wide matrix it can be bad - how to know how to size this data reuse?
-  */
-
 module sum_stationary #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
   parameter int N = 4,            // Computing NxN matrix multiplications
