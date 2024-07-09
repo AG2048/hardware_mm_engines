@@ -14,7 +14,7 @@ from cocotb.clock import Clock
 from cocotb.handle import SimHandleBase
 from cocotb.queue import Queue
 from cocotb.runner import get_runner
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
 NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 3000))
@@ -26,8 +26,106 @@ if cocotb.simulator.is_running():
 
 # Data reader - that asserts ready when instructed to start read data, not ready when stop. Checks for valid signals before reading.
 #   reader(ready=True/False) - and it logs whatever value it read
+class LIReader:
+    def __init__(self, clk: SimHandleBase, signals: Dict[str, SimHandleBase], valid: SimHandleBase, ready: SimHandleBase):
+        self.values = Queue[Dict[str, int]]()
+        self._clk = clk
+        self._signals = signals
+        self._valid = valid
+        self._ready = ready
+        self._coro = None
+
+    def start(self) -> None:
+        """Start monitor"""
+        if self._coro is not None:
+            raise RuntimeError("Monitor already started")
+        self._coro = cocotb.start_soon(self._run())  # Start a coroutine
+
+    def stop(self) -> None:
+        """Stop monitor"""
+        if self._coro is None:
+            raise RuntimeError("Monitor never started")
+        self._coro.kill()
+        self._coro = None
+    
+    async def set_status(self, ready: bool):
+        """Set so that the next rising edge we read or not"""
+        self._ready.value = 1 if ready else 0
+
+    async def _run(self) -> None:
+        while True:
+            await RisingEdge(self._clk)
+            if self._valid.value.binstr != "1" or self._ready.value.binstr != "1":
+                # Only proceed if both are ready. Wait until some signal is updated
+                await First(RisingEdge(self._valid), RisingEdge(self._ready))
+                continue
+            # Both valid and ready are true on a rising clock edge
+            self.values.put_nowait(self._sample())
+
+    def _sample(self) -> Dict[str, Any]:
+        """
+        Samples the data signals and builds a transaction object
+
+        Return value is what is stored in queue. Meant to be overriden by the user.
+        """
+        return {name: handle.value for name, handle in self._signals.items()}
+
 # Data writer - asserts valid when prepared,
 #   writer(valid=True/False, value)
+class LIWriter:
+    def __init__(self, clk: SimHandleBase, signals: SimHandleBase, valid: SimHandleBase, ready: SimHandleBase):
+        self.values = Queue[Dict[str, int]]()
+        self._clk = clk
+        self._signals = signals
+        self._valid = valid
+        self._ready = ready
+        self._coro = None
+
+    def start(self) -> None:
+        """Start monitor"""
+        if self._coro is not None:
+            raise RuntimeError("Monitor already started")
+        self._coro = cocotb.start_soon(self._run())  # Start a coroutine
+
+    def stop(self) -> None:
+        """Stop monitor"""
+        if self._coro is None:
+            raise RuntimeError("Monitor never started")
+        self._coro.kill()
+        self._coro = None
+    
+    async def set_status(self, input_data_and_valid):
+        """
+        input_data_and_valid would be an array of tuples:
+        [
+            ([data...], True), 
+            ([data...], False), 
+            ([data...], True), 
+        ]
+        symbolize the data it will be displaying at each clock edge. 
+        """
+
+        self._valid.value = 1 if valid else 0
+        self._signals.value = data  # input_data is a 2D array
+
+    async def _run(self) -> None:
+        while True:
+            await RisingEdge(self._clk)
+            if self._valid.value.binstr != "1" or self._ready.value.binstr != "1":
+                # Only proceed if both are ready. Wait until some signal is updated
+                await First(RisingEdge(self._valid), RisingEdge(self._ready))
+                continue
+            # Both valid and ready are true on a rising clock edge
+            self.values.put_nowait(self._sample())
+
+    def _sample(self) -> Dict[str, Any]:
+        """
+        Samples the data signals and builds a transaction object
+
+        Return value is what is stored in queue. Meant to be overriden by the user.
+        """
+        return {name: handle.value for name, handle in self._signals.items()}
+
 
 # Tester:
 #   init = define itself, add the writer/reader.
