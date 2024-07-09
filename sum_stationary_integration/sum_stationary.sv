@@ -5,18 +5,18 @@ module sum_stationary #(
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
   parameter int COUNTER_BITS = $clog2(2 * N - 1 + 1) // We count from 2N-1 to 0
 ) (
-  input                           clk,            // Clock signal
-  input                           reset,          // Reset signal
-  input                           a_input_valid,    // External input to module is correct/valid
-  input                           b_input_valid,    // External input to module is correct/valid
-  input                           output_ready,   // External device is ready to receive output
-  output                          input_ready,    // Device ready to receive input
-  output logic                    output_valid,   // Output is valid when all data is passed through
-  input logic                     output_by_row,  // Indicate if output should be done row wise or col wise
-  input                           last,           // Signal to indicate this input is the last one (only high with last data)
-  input        [DATA_WIDTH-1:0]   a_data[N-1:0],  // Column inputs of A (right to left)
-  input        [DATA_WIDTH-1:0]   b_data[N-1:0],  // Row inputs of B (bottom to top)
-  output logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0] c_data_streaming[N]    // Streaming data output of C
+  input   logic                                                   clk,            // Clock signal
+  input   logic                                                   reset,          // Reset signal
+  input   logic                                                   a_input_valid,  // External input to module is correct/valid
+  input   logic                                                   b_input_valid,  // External input to module is correct/valid
+  input   logic                                                   output_ready,   // External device is ready to receive output
+  output  logic                                                   input_ready,    // Device ready to receive input
+  output  logic                                                   output_valid,   // Output is valid when all data is passed through
+  input   logic                                                   output_by_row,  // Indicate if output should be done row wise or col wise
+  input   logic                                                   last,           // Signal to indicate this input is the last one (only high with last data)
+  input   logic [DATA_WIDTH-1:0]                                  a_data[N-1:0],  // Column inputs of A (right to left)
+  input   logic [DATA_WIDTH-1:0]                                  b_data[N-1:0],  // Row inputs of B (bottom to top)
+  output  logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0]  c_data_streaming[N]    // Streaming data output of C
 );
 
   // Define result valid signal
