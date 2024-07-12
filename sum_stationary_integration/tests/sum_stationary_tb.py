@@ -48,7 +48,7 @@ class LIReader:
         self._coro.kill()
         self._coro = None
     
-    async def set_status(self, ready: bool):
+    def set_status(self, ready: bool):
         """Set so that the next rising edge we read or not"""
         self._ready.value = 1 if ready else 0
 
@@ -97,22 +97,17 @@ class LIWriter:
         self._coro.kill()
         self._coro = None
     
-    async def set_status(self, input_data_and_valid):
+    def set_status(self, input_data_and_valid):
         """
-        input_data_and_valid would be an array of tuples:
-        [
-            ([data...], True), 
-            ([data...], False), 
-            ([data...], True), 
-        ]
+        input_data_and_valid would be tuples:
+        ([data...], True),
         symbolize the data it will be displaying at each clock edge. 
         True data will wait until ready to be delivered.
         False data will remain false for 1 clock edge
 
         (added last boolean to be the "last" signal)
         """
-        for command in input_data_and_valid:
-            self.values.put_nowait((command[0], command[1], command[2]))
+        self.values.put_nowait(input_data_and_valid)
 
     async def _run(self) -> None:
         """
@@ -121,7 +116,7 @@ class LIWriter:
         if self.values.empty():
             input_value, do_input, is_last = [0 for i in range(self._input_length)], False
         else:
-            input_value, do_input, is_last = self.values.get()
+            input_value, do_input, is_last = await self.values.get()
         while True:
             self._signals.value = input_value
             self._valid.value = do_input
@@ -249,10 +244,10 @@ async def multiply_test(dut):
     dut.a_input_valid.value = 0
     dut.b_input_valid.value = 0
     dut.output_ready.value = 0
-    dut.output_by_row.value = 0
+    dut.output_by_row.value = 1  # outputs row 0 first
     dut.last.value = 0
-    dut.a_data.value = create_a(lambda x: 0)
-    dut.b_data.value = create_b(lambda x: 0)
+    dut.a_data.value = create_row(N, lambda x: 0)
+    dut.b_data.value = create_row(N, lambda x: 0)
 
     # Reset DUT
     dut.reset.value = 1
@@ -281,28 +276,149 @@ async def multiply_test(dut):
         await RisingEdge(dut.clk)
 
 
+def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) -> List[List[int]]:
+        """Transaction-level model of the matrix multipler as instantiated"""
+        # TODO not fixed
+        outer_dimension = len(a_matrix)
+        inner_dimension = len(a_matrix[0])
+        return [
+            [
+                BinaryValue(
+                    sum(
+                        [
+                            a_matrix[i][n]
+                            * b_matrix[n][j]
+                            for n in range(inner_dimension)
+                        ]
+                    ),
+                    n_bits=MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH,
+                    bigEndian=False,
+                )
+                for j in range(outer_dimension)
+            ]
+                for i in range(outer_dimension)
+        ]
+    
+
+
+async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int, inner_dimension: int, 
+                      input_steady: bool, output_steady: bool, 
+                      input_not_steady_long_time: bool, output_not_steady_long_time: bool,
+                      output_by_row: bool):
+    """
+    repeat num_samples time, do outer_dimension x inner_dimension * inner_dimension * outer_dimension matrix
+    N = outer_dimension here
+
+    Test: output always ready to listen, input all streamlined
+    Test: Sprinkle random not_valid for input
+    Test: Output ready have random pauses
+    Test: input will be not valid for a long period of time
+    Test: output will be not_ready for a long period of time
+    """
+    expected_outputs = []
+    # Generate matrix A and B based on input
+    for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples))):
+        expected_outputs.append(matrix_multiplication(A, B))
+        # Fit all data to the input writer first (all num_samples)
+        # add random gaps if input won't be all valid
+        # A matrix input gen
+        for col_index in range(inner_dimension-1, 0, -1):
+            # get col in reverse order
+            col = [a_row[col_index] for a_row in A]
+            tester.a_input_writer.set_status((col, True, False))
+            if not input_steady and not input_not_steady_long_time:
+                # add random pauses here and there lasting 1-3 cycles
+                for _ in range(randint(0, 1)):
+                    tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
+            elif not input_steady and input_not_steady_long_time:
+                # adding random pauses that are at least as long as an entire input cycle
+                for _ in range(randint(0, inner_dimension)):
+                    tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
+        tester.a_input_writer.set_status((A[-1], True, True))
+        if not input_steady and not input_not_steady_long_time:
+            # add random pauses here and there lasting 1-3 cycles
+            for _ in range(randint(0, 1)):
+                tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
+        elif not input_steady and input_not_steady_long_time:
+            # adding random pauses that are at least as long as an entire input cycle
+            for _ in range(randint(0, inner_dimension)):
+                tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
+        
+        # B matrix input gen
+        for row in reversed(B)[:-1]:
+            tester.b_input_writer.set_status((row, True, False))
+            if not input_steady and not input_not_steady_long_time:
+                # add random pauses here and there lasting 1-3 cycles
+                for _ in range(randint(0, 1)):
+                    tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
+            elif not input_steady and input_not_steady_long_time:
+                # adding random pauses that are at least as long as an entire input cycle
+                for _ in range(randint(0, inner_dimension)):
+                    tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
+        tester.a_input_writer.set_status((B[0], True, True))
+        if not input_steady and not input_not_steady_long_time:
+            # add random pauses here and there lasting 1-3 cycles
+            for _ in range(randint(0, 1)):
+                tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
+        elif not input_steady and input_not_steady_long_time:
+            # adding random pauses that are at least as long as an entire input cycle
+            for _ in range(randint(0, inner_dimension)):
+                tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
+
+    all_output_collected = False
+    C = [[]]
+    num_collected = 0
+    long_output_pause_counter = 0
+    outout_reader_status = True
+
+    while not all_output_collected:
+        if output_steady: 
+            tester.outout_reader.set_status(True)
+        elif not output_not_steady_long_time:
+            if randint(0, 1) > 0:
+                tester.outout_reader.set_status(True)
+            else:
+                tester.outout_reader.set_status(False)
+        else:
+            long_output_pause_counter += 1
+            if long_output_pause_counter % inner_dimension == 0:
+                tester.outout_reader.set_status(outout_reader_status)
+                outout_reader_status = not outout_reader_status
+
+        await RisingEdge(dut.clk)
+
+        if not tester.output_reader.values.empty():
+            if len(C[-1]) < inner_dimension:
+                C[-1].append((await tester.output_reader.values.get())["c_data_streaming"])
+            else:
+                num_collected += 1
+                if num_collected >= num_samples:
+                    all_output_collected = True
+                    continue
+                C.append([])
+    
+    # Run comparison code
+    successful = True
+    for (expected_output, actual_result) in zip(expected_outputs, C):
+        if expected_output != actual_result:
+            failed = False
+            print("Expected:")
+            print(expected_output)
+            print("Actual:")
+            print(actual_result)
+    print("Test Successful?", successful)
+
+
 def create_matrix(func, rows, cols):
-    return [func(DATA_WIDTH) for row in range(rows) for col in range(cols)]
+    return [[func(DATA_WIDTH) for row in range(rows)] for col in range(cols)]
 
+def create_row(length, func=getrandbits):
+    return [func(DATA_WIDTH) for _ in range(length)]
 
-def create_a(func):
-    return create_matrix(func, N, N)
-
-
-def create_b(func):
-    return create_matrix(func, N, N)
-
-
-def gen_a(num_samples=NUM_SAMPLES, func=getrandbits):
-    """Generate random matrix data for A"""
+def gen_matrices(rows, cols, num_samples=NUM_SAMPLES, func=getrandbits):
+    """Generate random matrix data for matrices of set dimensions"""
     for _ in range(num_samples):
-        yield create_a(func)
-
-
-def gen_b(num_samples=NUM_SAMPLES, func=getrandbits):
-    """Generate random matrix data for B"""
-    for _ in range(num_samples):
-        yield create_b(func)
+        yield create_matrix(func, rows, cols)
 
 
 def test_matrix_multiplier_runner():
