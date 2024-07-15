@@ -412,17 +412,17 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 output_reader_status = not output_reader_status
 
         await RisingEdge(dut.clk)
-        dut._log.info("--------")
+        # dut._log.info("--------")
 
-        dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
-        dut._log.info(f"a_input_valid: {dut.a_input_valid.value}")
-        dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
-        dut._log.info(f"b_input_valid: {dut.b_input_valid.value}")
-        dut._log.info(f"input_ready: {dut.input_ready.value}")
+        # dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
+        # dut._log.info(f"a_input_valid: {dut.a_input_valid.value}")
+        # dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        # dut._log.info(f"b_input_valid: {dut.b_input_valid.value}")
+        # dut._log.info(f"input_ready: {dut.input_ready.value}")
 
-        dut._log.info(f"outputs: {[val.integer for val in dut.c_data_streaming.value]}")
-        dut._log.info(f"output_valid: {dut.output_valid.value}")
-        dut._log.info(f"output_ready: {dut.output_ready.value}")
+        # dut._log.info(f"outputs: {[val.integer for val in dut.c_data_streaming.value]}")
+        # dut._log.info(f"output_valid: {dut.output_valid.value}")
+        # dut._log.info(f"output_ready: {dut.output_ready.value}")
         
         # processing_units_row = getattr(dut, f'processing_units_row[0]')
         # processing_units_col = getattr(processing_units_row, f'processing_units_col[0]')
