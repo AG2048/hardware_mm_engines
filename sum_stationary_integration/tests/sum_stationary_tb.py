@@ -27,8 +27,9 @@ if cocotb.simulator.is_running():
 # Data reader - that asserts ready when instructed to start read data, not ready when stop. Checks for valid signals before reading.
 #   reader(ready=True/False) - and it logs whatever value it read
 class LIReader:
-    def __init__(self, clk: SimHandleBase, signals: Dict[str, SimHandleBase], valid: SimHandleBase, ready: SimHandleBase):
+    def __init__(self, dut: SimHandleBase, clk: SimHandleBase, signals: Dict[str, SimHandleBase], valid: SimHandleBase, ready: SimHandleBase):
         self.values = Queue[Dict[str, int]]()
+        self._dut = dut
         self._clk = clk
         self._signals = signals
         self._valid = valid
@@ -60,6 +61,7 @@ class LIReader:
                 await First(RisingEdge(self._valid), RisingEdge(self._ready))
                 continue
             # Both valid and ready are true on a rising clock edge
+            # raise Exception(f"putting values: {self._sample()}")
             self.values.put_nowait(self._sample())
 
     def _sample(self) -> Dict[str, Any]:
@@ -73,8 +75,9 @@ class LIReader:
 # Data writer - asserts valid when prepared,
 #   writer(valid=True/False, value)
 class LIWriter:
-    def __init__(self, clk: SimHandleBase, signals: SimHandleBase, valid: SimHandleBase, ready: SimHandleBase, last: SimHandleBase, sends_last: bool, input_length: int):
+    def __init__(self, dut: SimHandleBase, clk: SimHandleBase, signals: SimHandleBase, valid: SimHandleBase, ready: SimHandleBase, last: SimHandleBase, sends_last: bool, input_length: int):
         self.values = Queue[Tuple[int, bool, bool]]()
+        self._dut = dut
         self._clk = clk
         self._signals = signals
         self._valid = valid
@@ -114,10 +117,11 @@ class LIWriter:
         Goal: iterate thru values, and write. If true, do proper wait. If False, wait a random number of cycles.
         """
         if self.values.empty():
-            input_value, do_input, is_last = [0 for i in range(self._input_length)], False
+            input_value, do_input, is_last = [0 for _ in range(self._input_length)], False, False
         else:
             input_value, do_input, is_last = await self.values.get()
         while True:
+            # self._dut._log.info(f"input_value: {input_value}, do_input: {do_input}")
             self._signals.value = input_value
             self._valid.value = do_input
             if self._sends_last:
@@ -127,7 +131,12 @@ class LIWriter:
                 # If ready true, await rising edge
                 # if not, await ready true, then await rising edge.
                 while True:
-                    if self._ready.value.binstr != "1":
+                    # self._dut._log.info(f"self._ready.value.binstr: {self._ready.value.binstr}")
+                    if self._ready.value.binstr == "1":
+                        # if self._sends_last:
+                        #     self._dut._log.info(f"input: {input_value}")
+                        #     self._dut._log.info(f"do_input: {do_input}")
+                        #     self._dut._log.info(f"is_last: {is_last}")
                         await RisingEdge(self._clk)
                         break
                     else:
@@ -141,9 +150,14 @@ class LIWriter:
                     await RisingEdge(self._clk)
 
             if self.values.empty():
-                input_value, do_input, is_last = [0 for i in range(self._input_length)], False
+                input_value, do_input, is_last = [0 for _ in range(self._input_length)], False, False
             else:
-                input_value, do_input, is_last = self.values.get()
+                # try:
+                input_value, do_input, is_last = await self.values.get()
+                # except Exception as e:
+                #     print(f"An error occurred: {e}")
+                #     raise Exception(str(self.values.get()))
+
 
 
 # Tester:
@@ -181,6 +195,7 @@ class MatrixMultiplierTester:
         self.dut = matrix_multiplier_entity
 
         self.a_input_writer = LIWriter(
+            dut=self.dut,
             clk=self.dut.clk, 
             signals=self.dut.a_data, 
             valid=self.dut.a_input_valid, 
@@ -191,6 +206,7 @@ class MatrixMultiplierTester:
         )
 
         self.b_input_writer = LIWriter(
+            dut=self.dut,
             clk=self.dut.clk, 
             signals=self.dut.b_data, 
             valid=self.dut.b_input_valid, 
@@ -201,7 +217,8 @@ class MatrixMultiplierTester:
         )
 
         self.output_reader = LIReader(
-            clk=self.dut.clk_i, 
+            dut=self.dut,
+            clk=self.dut.clk, 
             signals=dict(c_data_streaming=self.dut.c_data_streaming),
             valid=self.dut.output_valid, 
             ready=self.dut.output_ready
@@ -264,10 +281,12 @@ async def multiply_test(dut):
     tester.output_reader.set_status(True)
 
     # Do multiplication operations
-    test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
                       input_steady=True, output_steady=True, 
                       input_not_steady_long_time=False, output_not_steady_long_time=False,
                       output_by_row=True)
+    
+    
 
 
 def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) -> List[List[int]]:
@@ -313,10 +332,12 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     expected_outputs = []
     # Generate matrix A and B based on input
     for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples))):
+        dut._log.info(f"operation {i}")
         matrix_product_temp = matrix_multiplication(A, B)
         if not output_by_row:
             matrix_product_temp_transposed = [[matrix_product_temp[i][j] for i in outer_dimension] for j in outer_dimension]
         expected_outputs.append(matrix_product_temp if output_by_row else matrix_product_temp_transposed)
+        dut._log.info(f"Input: {A}, {B}")
         # Fit all data to the input writer first (all num_samples)
         # add random gaps if input won't be all valid
         # A matrix input gen
@@ -332,7 +353,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 # adding random pauses that are at least as long as an entire input cycle
                 for _ in range(randint(0, inner_dimension)):
                     tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
-        tester.a_input_writer.set_status((A[-1], True, True))
+        tester.a_input_writer.set_status(([a_row[0] for a_row in A], True, True))
         if not input_steady and not input_not_steady_long_time:
             # add random pauses here and there lasting 1-3 cycles
             for _ in range(randint(0, 1)):
@@ -343,7 +364,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
         
         # B matrix input gen
-        for row in reversed(B)[:-1]:
+        for row in list(reversed(B))[:-1]:
             tester.b_input_writer.set_status((row, True, False))
             if not input_steady and not input_not_steady_long_time:
                 # add random pauses here and there lasting 1-3 cycles
@@ -353,7 +374,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 # adding random pauses that are at least as long as an entire input cycle
                 for _ in range(randint(0, inner_dimension)):
                     tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
-        tester.a_input_writer.set_status((B[0], True, True))
+        tester.b_input_writer.set_status((B[0], True, True))
         if not input_steady and not input_not_steady_long_time:
             # add random pauses here and there lasting 1-3 cycles
             for _ in range(randint(0, 1)):
@@ -367,43 +388,66 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     C = [[]]
     num_collected = 0
     long_output_pause_counter = 0
-    outout_reader_status = True
+    output_reader_status = True
+
+    cycle_count = 0
 
     while not all_output_collected:
+        # dut._log.info(f"a value: {dut.a_data.value}")
+        # dut._log.info(f"a valid: {dut.a_input_valid.value}")
+        # dut._log.info(f"b value: {dut.b_data.value}")
+        # dut._log.info(f"b valid: {dut.b_input_valid.value}")
+        # dut._log.info(f"input_ready: {dut.input_ready.value}")
+        # dut._log.info(f"output_collected?: {all_output_collected}, NumCollected: {num_collected}, NumSamples: {num_samples}")
+        
+        # dut._log.info(f"C?: {C}")
         if output_steady: 
-            tester.outout_reader.set_status(True)
+            tester.output_reader.set_status(True)
         elif not output_not_steady_long_time:
             if randint(0, 1) > 0:
-                tester.outout_reader.set_status(True)
+                tester.output_reader.set_status(True)
             else:
-                tester.outout_reader.set_status(False)
+                tester.output_reader.set_status(False)
         else:
             long_output_pause_counter += 1
             if long_output_pause_counter % inner_dimension == 0:
-                tester.outout_reader.set_status(outout_reader_status)
-                outout_reader_status = not outout_reader_status
+                tester.output_reader.set_status(output_reader_status)
+                output_reader_status = not output_reader_status
 
         await RisingEdge(dut.clk)
+        dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
+        dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        # dut._log.info(f"input ready : {dut.input_ready.value}")
+        cycle_count += 1
+        if cycle_count > 60:
+            raise Exception("done")
 
+        # dut._log.info(tester.output_reader.values.empty())
         if not tester.output_reader.values.empty():
-            if len(C[-1]) < inner_dimension:
-                C[-1].append((await tester.output_reader.values.get())["c_data_streaming"])
-            else:
-                num_collected += 1
-                if num_collected >= num_samples:
-                    all_output_collected = True
-                    continue
-                C.append([])
+            C[-1].append((await tester.output_reader.values.get())["c_data_streaming"])
+            # dut._log.info(f"C: {C}")
+        # dut._log.info(f"num_collected {num_collected}")
+        if len(C[-1]) >= inner_dimension:
+            num_collected += 1
+            C.append([])
+        if num_collected >= num_samples:
+            # dut._log.info(f"Should have been set around here---------------")
+            all_output_collected = True
+            continue
+        # dut._log.info(f"all_output_collected: {all_output_collected}")
     
     # Run comparison code
     successful = True
     for (expected_output, actual_result) in zip(expected_outputs, C):
-        if expected_output != actual_result:
-            failed = False
-            print("Expected:")
-            print(expected_output)
-            print("Actual:")
-            print(actual_result)
+        dut._log.info("Expected")
+        dut._log.info([[val.integer for val in row] for row in expected_output])
+        dut._log.info("Actual")
+        dut._log.info([[val.integer for val in row] for row in actual_result])
+        # try:
+        assert expected_output == actual_result
+        # except Exception as e:
+            
+        #     raise Exception(e)
     print("Test Successful?", successful)
 
 
@@ -425,7 +469,7 @@ def test_matrix_multiplier_runner():
     This file can be run directly or via pytest discovery.
     """
     hdl_toplevel_lang = os.getenv("HDL_TOPLEVEL_LANG", "verilog")
-    sim = os.getenv("SIM", "icarus")
+    sim = os.getenv("SIM", "modelsim")
 
     proj_path = Path(__file__).resolve().parent.parent
 
@@ -435,12 +479,12 @@ def test_matrix_multiplier_runner():
 
     verilog_sources = [proj_path / "hdl" / "sum_stationary.sv"]
 
-    if sim in ["riviera", "activehdl"]:
-        build_args = ["-sv2k12"]
+    # if sim in ["riviera", "activehdl"]:
+    #     build_args = ["-sv2k12"]
 
     extra_args = []
-    if sim == "ghdl":
-        extra_args = ["--std=08"]
+    # if sim == "ghdl":
+    #     extra_args = ["--std=08"]
 
     parameters = {
         "DATA_WIDTH": int(os.getenv("DATA_WIDTH", "8")),
