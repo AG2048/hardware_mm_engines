@@ -415,8 +415,13 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 output_reader_status = not output_reader_status
 
         await RisingEdge(dut.clk)
-        dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
-        dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        # dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
+        # dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        # dut._log.info(f"unit_register: {dut.u_processing_unit[0][0].north_i_reg.value.integer}")
+        # processing_units_row = getattr(dut, f'processing_units_row[3]')
+        # processing_units_col = getattr(processing_units_row, f'processing_units_col[3]')
+        # u_processing_unit_instance = getattr(processing_units_col, 'u_processing_unit')
+        # dut._log.info(f"north_reg: {u_processing_unit_instance.north_i_reg.value.integer}, west reg: {u_processing_unit_instance.west_i_reg.value.integer}, result: {u_processing_unit_instance.result_reg.value.integer}")
         # dut._log.info(f"input ready : {dut.input_ready.value}")
         cycle_count += 1
         if cycle_count > 60:
