@@ -264,16 +264,10 @@ async def multiply_test(dut):
     tester.output_reader.set_status(True)
 
     # Do multiplication operations
-    for i, (A, B) in enumerate(zip(gen_a(), gen_b())):
-        for row in A[:-1]:
-            tester.a_input_writer.set_status((row, True, False))
-        tester.a_input_writer.set_status((A[-1], True, True))
-        for row in B[:-1]:
-            tester.b_input_writer.set_status((row, True, False))
-        tester.b_input_writer.set_status((B[-1], True, True))
-
-    for _ in range(100):
-        await RisingEdge(dut.clk)
+    test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=True, output_steady=True, 
+                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      output_by_row=True)
 
 
 def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) -> List[List[int]]:
@@ -304,7 +298,7 @@ def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) 
 async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int, inner_dimension: int, 
                       input_steady: bool, output_steady: bool, 
                       input_not_steady_long_time: bool, output_not_steady_long_time: bool,
-                      output_by_row: bool):
+                      output_by_row: bool = True):
     """
     repeat num_samples time, do outer_dimension x inner_dimension * inner_dimension * outer_dimension matrix
     N = outer_dimension here
@@ -315,10 +309,14 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     Test: input will be not valid for a long period of time
     Test: output will be not_ready for a long period of time
     """
+    dut.output_by_row.value = output_by_row  # Output based on row or col
     expected_outputs = []
     # Generate matrix A and B based on input
     for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples))):
-        expected_outputs.append(matrix_multiplication(A, B))
+        matrix_product_temp = matrix_multiplication(A, B)
+        if not output_by_row:
+            matrix_product_temp_transposed = [[matrix_product_temp[i][j] for i in outer_dimension] for j in outer_dimension]
+        expected_outputs.append(matrix_product_temp if output_by_row else matrix_product_temp_transposed)
         # Fit all data to the input writer first (all num_samples)
         # add random gaps if input won't be all valid
         # A matrix input gen
