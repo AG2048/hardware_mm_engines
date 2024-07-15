@@ -55,7 +55,7 @@ module sum_stationary #(
   ) west_delay_register (
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .input_valid(a_input_valid),  // Only 1 valid is needed because shifting data is dependent on enable, not input valid
+    .read_input(a_input_valid && input_ready),  // Must consider ready as well (data can be valid in between runs)
     .enable(enable),
     .data_i(a_data[N-1:0]),
     .data_o(west_inputs[N-1:0])
@@ -66,7 +66,7 @@ module sum_stationary #(
   ) north_delay_register(
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .input_valid(b_input_valid),
+    .read_input(b_input_valid && input_ready),
     .enable(enable),
     .data_i(b_data[N-1:0]),
     .data_o(north_inputs[N-1:0])
@@ -185,13 +185,13 @@ module input_delay_register #(
 ) (
   input                           clk,            // Clock Signal
   input                           reset,          // Reset signal
-  input                           input_valid,    // Load the data into the registers
+  input                           read_input,     // If the input data can be read (should be combination of ready and valid)
   input                           enable,         // Shift the shift registers
   input        [DATA_WIDTH-1:0]   data_i[N-1:0],  // Input Data from outside modules
   output logic [DATA_WIDTH-1:0]   data_o[N-1:0]   // Output Data sent to systolic array units
 );
   // Output data's first value is always direct pass thru
-  assign data_o[0] = input_valid ? data_i[0] : '0;
+  assign data_o[0] = read_input ? data_i[0] : '0;
 
   // Generate a "straircase" array of shift registers
   logic [DATA_WIDTH-1:0] shift_reg [N-1:1][N-2:0]; // Have registers except top left corner
@@ -213,7 +213,7 @@ module input_delay_register #(
           for (int j = i-1; j > 0; j--) begin
             shift_reg_i[j] <= shift_reg_i[j-1];
           end
-          shift_reg_i[0] <= input_valid ? data_i[i] : '0; // Shift in the input
+          shift_reg_i[0] <= read_input ? data_i[i] : '0; // Shift in the input
         end
       end
       assign shift_reg[i][i-1:0] = shift_reg_i; // Assign internal shift register to the array
