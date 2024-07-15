@@ -17,7 +17,7 @@ from cocotb.runner import get_runner
 from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
-NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 2))
+NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 50))
 if cocotb.simulator.is_running():
     DATA_WIDTH = int(cocotb.top.DATA_WIDTH)
     N = int(cocotb.top.N)      
@@ -128,16 +128,12 @@ class LIWriter:
                 self._last.value = is_last
             if do_input:
                 # We are writing
-                # If ready true, await rising edge
-                # if not, await ready true, then await rising edge.
+                # After rising edge, check if ready. If ready, then switch value
+                # if not ready, wait until ready is asserted, then change value on next rising edge
                 while True:
+                    await RisingEdge(self._clk)
                     # self._dut._log.info(f"self._ready.value.binstr: {self._ready.value.binstr}")
                     if self._ready.value.binstr == "1":
-                        # if self._sends_last:
-                        #     self._dut._log.info(f"input: {input_value}")
-                        #     self._dut._log.info(f"do_input: {do_input}")
-                        #     self._dut._log.info(f"is_last: {is_last}")
-                        await RisingEdge(self._clk)
                         break
                     else:
                         await RisingEdge(self._ready)
@@ -343,7 +339,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
         # A matrix input gen
         for col_index in range(inner_dimension-1, 0, -1):
             # get col in reverse order
-            col = [a_row[col_index] for a_row in A]
+            col = list(reversed([a_row[col_index] for a_row in A]))  # Reversed because my module take [N-1:0]
             tester.a_input_writer.set_status((col, True, False))
             if not input_steady and not input_not_steady_long_time:
                 # add random pauses here and there lasting 1-3 cycles
@@ -353,7 +349,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 # adding random pauses that are at least as long as an entire input cycle
                 for _ in range(randint(0, inner_dimension)):
                     tester.a_input_writer.set_status((create_row(outer_dimension), False, False))
-        tester.a_input_writer.set_status(([a_row[0] for a_row in A], True, True))
+        tester.a_input_writer.set_status((list(reversed([a_row[0] for a_row in A])), True, True))
         if not input_steady and not input_not_steady_long_time:
             # add random pauses here and there lasting 1-3 cycles
             for _ in range(randint(0, 1)):
@@ -365,7 +361,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
         
         # B matrix input gen
         for row in list(reversed(B))[:-1]:
-            tester.b_input_writer.set_status((row, True, False))
+            tester.b_input_writer.set_status((list(reversed(row)), True, False))
             if not input_steady and not input_not_steady_long_time:
                 # add random pauses here and there lasting 1-3 cycles
                 for _ in range(randint(0, 1)):
@@ -374,7 +370,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 # adding random pauses that are at least as long as an entire input cycle
                 for _ in range(randint(0, inner_dimension)):
                     tester.b_input_writer.set_status((create_row(outer_dimension), False, False))
-        tester.b_input_writer.set_status((B[0], True, True))
+        tester.b_input_writer.set_status((list(reversed(B[0])), True, True))
         if not input_steady and not input_not_steady_long_time:
             # add random pauses here and there lasting 1-3 cycles
             for _ in range(randint(0, 1)):
@@ -390,6 +386,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     long_output_pause_counter = 0
     output_reader_status = True
 
+    # This variable was used to "timeout" when debugging
     cycle_count = 0
 
     while not all_output_collected:
@@ -415,17 +412,25 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 output_reader_status = not output_reader_status
 
         await RisingEdge(dut.clk)
+        # dut._log.info("--------")
+
         # dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
         # dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        # dut._log.info(f"input_ready: {dut.input_ready.value}")
         # dut._log.info(f"unit_register: {dut.u_processing_unit[0][0].north_i_reg.value.integer}")
-        # processing_units_row = getattr(dut, f'processing_units_row[3]')
-        # processing_units_col = getattr(processing_units_row, f'processing_units_col[3]')
+        
+        # processing_units_row = getattr(dut, f'processing_units_row[0]')
+        # processing_units_col = getattr(processing_units_row, f'processing_units_col[0]')
         # u_processing_unit_instance = getattr(processing_units_col, 'u_processing_unit')
         # dut._log.info(f"north_reg: {u_processing_unit_instance.north_i_reg.value.integer}, west reg: {u_processing_unit_instance.west_i_reg.value.integer}, result: {u_processing_unit_instance.result_reg.value.integer}")
+        
+
         # dut._log.info(f"input ready : {dut.input_ready.value}")
-        cycle_count += 1
-        if cycle_count > 60:
-            raise Exception("done")
+
+        # This was used to "timeout" when debugging
+        # cycle_count += 1
+        # if cycle_count > 60:
+        #     raise Exception("done")
 
         # dut._log.info(tester.output_reader.values.empty())
         if not tester.output_reader.values.empty():
