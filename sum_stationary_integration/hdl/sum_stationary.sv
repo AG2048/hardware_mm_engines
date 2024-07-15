@@ -3,7 +3,7 @@ module sum_stationary #(
   parameter int N = 4,            // Computing NxN matrix multiplications
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
-  parameter int COUNTER_BITS = $clog2(2 * N - 1 + 1) // We count from 2N-1 to 0
+  parameter int COUNTER_BITS = $clog2(2 * N + 1) // We count from 2N to 0
 ) (
   input   logic                                                   clk,            // Clock signal
   input   logic                                                   reset,          // Reset signal
@@ -27,7 +27,7 @@ module sum_stationary #(
   always_ff @(posedge clk) begin
     if (reset || (result_valid && !output_valid)) begin
       // Reset or, we pushing result to output buffers
-      counter <= 2 * N - 1;  // N-1 to pass data through registers, N to compute
+      counter <= 2 * N;  // N-1 to pass data through registers, N+1 to compute
       input_done <= 0;
     end else if (input_done) begin
       // Input is done, just decrease count and that's it
@@ -78,8 +78,8 @@ module sum_stationary #(
   logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1:0] c_data[N-1:0][N-1:0]; // Full computation of C to be buffered
   generate
     genvar i, j;
-    for (i = 0; i < N; i++) begin : row
-      for (j = 0; j < N; j++) begin : col
+    for (i = 0; i < N; i++) begin : processing_units_row
+      for (j = 0; j < N; j++) begin : processing_units_col
         processing_unit #(
           .DATA_WIDTH(DATA_WIDTH),
           .N(N),
