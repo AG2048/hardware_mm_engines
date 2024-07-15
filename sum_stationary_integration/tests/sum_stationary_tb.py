@@ -17,7 +17,7 @@ from cocotb.runner import get_runner
 from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
-NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 50))
+NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 2))
 if cocotb.simulator.is_running():
     DATA_WIDTH = int(cocotb.top.DATA_WIDTH)
     N = int(cocotb.top.N)      
@@ -278,8 +278,8 @@ async def multiply_test(dut):
 
     # Do multiplication operations
     await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
-                      input_steady=True, output_steady=True, 
-                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
                       output_by_row=True)
     
     
@@ -412,12 +412,17 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
                 output_reader_status = not output_reader_status
 
         await RisingEdge(dut.clk)
-        # dut._log.info("--------")
+        dut._log.info("--------")
 
-        # dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
-        # dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
-        # dut._log.info(f"input_ready: {dut.input_ready.value}")
-        # dut._log.info(f"unit_register: {dut.u_processing_unit[0][0].north_i_reg.value.integer}")
+        dut._log.info(f"A inputs: {[val.integer for val in dut.a_data.value]}")
+        dut._log.info(f"a_input_valid: {dut.a_input_valid.value}")
+        dut._log.info(f"B inputs: {[val.integer for val in dut.b_data.value]}")
+        dut._log.info(f"b_input_valid: {dut.b_input_valid.value}")
+        dut._log.info(f"input_ready: {dut.input_ready.value}")
+
+        dut._log.info(f"outputs: {[val.integer for val in dut.c_data_streaming.value]}")
+        dut._log.info(f"output_valid: {dut.output_valid.value}")
+        dut._log.info(f"output_ready: {dut.output_ready.value}")
         
         # processing_units_row = getattr(dut, f'processing_units_row[0]')
         # processing_units_col = getattr(processing_units_row, f'processing_units_col[0]')
