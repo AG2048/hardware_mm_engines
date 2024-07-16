@@ -2,7 +2,7 @@ module sum_stationary #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
   parameter int N = 4,            // Computing NxN matrix multiplications
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
-  parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
+  parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change TODO: should be clog(MAX_MATRIX_LEN+1)
   parameter int COUNTER_BITS = $clog2(2 * N + 1) // We count from 2N to 0
 ) (
   input   logic                                                   clk,            // Clock signal
@@ -143,7 +143,6 @@ module processing_unit #(
   // Calculate result comb
   assign result_calc = product_reg + result_reg;
   assign product_calc = north_i * west_i;
-  // TODO: add a product_calc and a product_reg to improve clock cycle of the design. But may have to adjust how enable / counter works
 
   // Output is always result register
   assign result_o = result_reg;
