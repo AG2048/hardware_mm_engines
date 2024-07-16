@@ -2,3 +2,9 @@
 */incremental_db
 */output_files
 */simulation
+
+*/sim_build
+*/__pycache__
+*/modelsim.ini
+*/results.xml
+*/transcript
