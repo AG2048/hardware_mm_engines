@@ -7,10 +7,10 @@ SIM ?= modelsim
 PWD=$(shell pwd)
 
 # Matrix parameters
-DATA_WIDTH ?= 8
+DATA_WIDTH ?= 16
 N ?= 4
-MULTIPLY_DATA_WIDTH ?= 16
-ACCUM_DATA_WIDTH ?= 16
+MULTIPLY_DATA_WIDTH ?= 32
+ACCUM_DATA_WIDTH ?= 3
 
 
 VERILOG_SOURCES = $(PWD)/../hdl/sum_stationary.sv
