@@ -52,14 +52,14 @@ module memory_buffer #(
 
   // There shall be 2 main operations: Read from memory and Write to processor
 
+  // Listen from controller: set reading ops to not ready when in operation, only when cycle counter reaches end we set ready.
+
   // Read from memory: 
   /* always_ff until read address, also read length
    * When both length and address is read:
    *    every clock edge, load address + memory_counter to load address + memory_counter + streaming size to our own memory (sequentially, to Index probably by memory_counter)
    *    stop when memory counter >= length * N
    *    (could consider count down if that's easier)
-   *
-   * NOTE: when receiving this command, reset the counters (this indicates another set of data is to be sent and stop input)
    */
 
   // Write to Processor:
