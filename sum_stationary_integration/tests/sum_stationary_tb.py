@@ -270,8 +270,7 @@ async def multiply_test(dut):
 
     # start tester after reset so we know it's in a good state
     tester.start()
-
-    dut._log.info(f"Test multiplication operations for N={N}")
+    dut._log.info(f"Test multiplication operations for:\n\tDATA_WIDTH={DATA_WIDTH}\n\tN={N}\n\tMULTIPLY_DATA_WIDTH={MULTIPLY_DATA_WIDTH}\n\tACCUM_DATA_WIDTH={ACCUM_DATA_WIDTH}")
 
     # ready to listen:
     tester.output_reader.set_status(True)
