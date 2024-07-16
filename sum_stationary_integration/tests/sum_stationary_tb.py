@@ -475,7 +475,14 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
             num_collected += 1
             # Run the comparison test here:
             dut._log.info(f"Successful Number: {num_collected}")
-            assert expected_outputs[num_collected-1] == C[-1]
+            try:
+                assert expected_outputs[num_collected-1] == C[-1]
+            except Exception as e:
+                dut._log.info("Expected")
+                dut._log.info([[val.integer for val in row] for row in expected_outputs[num_collected-1]])
+                dut._log.info("Actual")
+                dut._log.info([[val.integer for val in row] for row in C[-1]])
+                raise e
             C.append([])
         if num_collected >= num_samples:
             # dut._log.info(f"Should have been set around here---------------")
