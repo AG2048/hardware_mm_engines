@@ -586,7 +586,7 @@ def test_matrix_multiplier_runner():
     runner = get_runner(sim)
 
     runner.build(
-        hdl_toplevel="matrix_multiplier",
+        hdl_toplevel="sum_stationary",
         verilog_sources=verilog_sources,
         vhdl_sources=vhdl_sources,
         build_args=build_args + extra_args,
@@ -595,9 +595,9 @@ def test_matrix_multiplier_runner():
     )
 
     runner.test(
-        hdl_toplevel="matrix_multiplier",
+        hdl_toplevel="sum_stationary",
         hdl_toplevel_lang=hdl_toplevel_lang,
-        test_module="test_matrix_multiplier",
+        test_module="sum_stationary_tb",
         test_args=extra_args,
     )
 

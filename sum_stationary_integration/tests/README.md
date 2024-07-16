@@ -8,6 +8,10 @@ Change device parameters in `Makefile`, might have to remove sim_build directory
 
 Currently I'm not sure what does the `parameters` argument in the `sum_stationary_tb.py` file does, the Makefile argument seems to override it.
 
+Turned out `test_matrix_multiplier_runner()` is only for if you run the python file directly. But if you use `make` you don't need it.
+
+My program just completely doesn't work unless its compiled by modelsim.
+
 The tests were done with:
 - modelsim 10.7a
 - cocotb 1.8.1
