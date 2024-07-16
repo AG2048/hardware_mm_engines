@@ -16,3 +16,7 @@ The tests were done with:
 - modelsim 10.7a
 - cocotb 1.8.1
 - python 3.8
+
+We can run by `make clean && make` to clear out the sim_build directory every re-run
+
+Also consider if we can get the waveform so we can better verify the results. 
