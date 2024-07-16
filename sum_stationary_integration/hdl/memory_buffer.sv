@@ -1,12 +1,8 @@
-/*  
- *  Memory buffer:
- *  Parameters: DATA_WIDTH, N
- *  Receives: RAM address to read from, how long (inner dimension)
- *  Does: Load from RAM an N by inner_dimension array, and sends them to module one by one (with ready/valid), last signal on last value.
- *    Then wait for new instructions
+/*  Memory buffer:
+ *  Reads instruction (memory address, length of input, how many times this input is to be sent to processor(s))
+ *  Reads from RAM according to instructions, loads value onto on-chip memory/buffer
+ *  Writes the values to processor (with a "last" signal), cycle for num_cycle times
  */
-
-// Assumption: the memory can send N numbers at once.
 
 module memory_buffer #(
   parameter int DATA_WIDTH = 8,           // Using 8-bit integers 
@@ -22,66 +18,100 @@ module memory_buffer #(
   input   logic                           clk,            // Clock signal
   input   logic                           reset,          // To clear buffer and restore counter
 
-  // Communicate with the control module delivering address to buffer
-  input   logic                           address_valid,
-  output  logic                           address_ready,
-  input   logic [MEMORY_ADDRESS_BITS-1:0] address_input,
-  // Communicate with the control module delivering length of operation to buffer
-  input   logic                           length_valid,
-  output  logic                           length_ready,
-  input   logic [COUNTER_BITS-1:0]        length_input,
-  // Communicate with the control module delivering number of full cycles the data should be sent to processor
-  input   logic                           cycles_valid,
-  output  logic                           cycles_ready,
-  input   logic [CYCLE_COUNTER_BITS-1:0]  cycles_input,
+  // Communicate with the control module delivering instructions to buffer - To be connected to controller (send instructions on rising edge where valid and ready)
+  input   logic                           instruction_valid, 
+  output  logic                           instruction_ready,
+  input   logic [MEMORY_ADDRESS_BITS-1:0] address_input, // The start address of the memory where the data will be. (data will be at addr: address_input, address_input+1, address_input+2...)
+  input   logic [COUNTER_BITS-1:0]        length_input, // How big is the input, we will send matrix multiplication of [N x length_input] * [length_input x N]
+  input   logic [CYCLE_COUNTER_BITS-1:0]  cycles_input, // How many times the full buffer will be sent to processor before accepting new instructions. (for data reuse)
 
-  // Communicating with memory to read data
-  output  logic [MEMORY_ADDRESS_BITS-1:0] memory_address,
-  input   logic [DATA_WIDTH-1:0]          memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0],
+  // Communicating with memory to read data (TODO: assuming memory read have no delay)
+  output  logic [MEMORY_ADDRESS_BITS-1:0] memory_address, // address we are telling the memory we are reading from
+  input   logic [DATA_WIDTH-1:0]          memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
 
   // Communicating with the processor
-  output  logic                           processor_input_valid,
-  input   logic                           processor_input_ready,
-  output  logic [DATA_WIDTH-1:0]          processor_input_data[N-1:0],
-  output  logic                           last
+  output  logic                           processor_input_valid, // valid for processor input
+  input   logic                           processor_input_ready, // ready for processor input
+  output  logic [DATA_WIDTH-1:0]          processor_input_data[N-1:0], // the N len vector of row/col to be sent
+  output  logic                           last // The signal sent alongside the last value in the operation to tell the module to "wrap up" computation
 );
-  logic [MEMORY_ADDRESS_BITS-1:0] address_register;
-  logic [MEMORY_INPUT_COUNTER_BITS-1:0] memory_reading_counter; // to count if we have read enough data from memory
-  logic [COUNTER_BITS-1:0] processor_writing_counter; // to count if we have written enough data to processor
-  logic [CYCLE_COUNTER_BITS-1:0] cycle_counter; // to count how many times the full data is sent
-
-  // There shall be 2 main operations: Read from memory and Write to processor
-
-  // Listen from controller: set reading ops to not ready when in operation, only when cycle counter reaches end we set ready.
-
-  // Read from memory: 
-  /* always_ff until read address, also read length
-   * When both length and address is read:
-   *    every clock edge, load address + memory_counter to load address + memory_counter + streaming size to our own memory (sequentially, to Index probably by memory_counter)
-   *    stop when memory counter >= length * N
-   *    (could consider count down if that's easier)
-   */
-
-  // Write to Processor:
-  /* always ff until memory counter >= (processor_counter+1) * N (processor counter counts number of Nx1 vectors sent)
-   * when there are sufficient data in buffer to start writing the next value, load values from processor_counter*N to (processor_counter+1)*N-1 -> processor_input_data
-   * set input valid. 
-   * if input valid && input ready, either do next value or input not valid
-   * if processor_counter == length, also send last. 
-   * (keep sending values, repeatedly) (Until, cycle count reaches threshold) (meaning we should load new data, and end current data)
-   * (could consider count DOWN, and just reverse order to output)
-   */
-
-  always_ff @(posedge clk) begin
-    if (reset) begin
-      
-    end else if (input_done) begin
-      // Input is done, just decrease count and that's it
-      counter <= counter - 1;
-    end else if (last && input_ready && a_input_valid && b_input_valid) begin  
-      // Last input is imposed, we begin countdown. Only count down after we sure data is in
-      counter <= counter - 1;
-      input_done <= 1;
+  /************************
+   * Read from controller *
+   ************************/
+  // Define Registers
+  logic [MEMORY_ADDRESS_BITS-1:0] address_register; // remember the memory address after receiving from controller
+  logic [COUNTER_BITS-1:0] length_register; // remember the length of input matrix after receiving from controller
+  logic [CYCLE_COUNTER_BITS-1:0] cycles_counter; // to count how many times the full data is sent (used to set ready signals with controller)
+  // Always FF Block
+  always_ff @(posedge clk) begin : read_from_controller
+    if (reset || (cycles_counter == 1 && last && processor_input_valid && processor_input_ready)) begin
+      /* Reset when:
+       *  we are on last cycle
+       *  we are writing the last value
+       *  It's valid and ready
+       */
+      address_register <= '0;
+      length_register <= '0;
+      cycles_counter <= '0;
+    end else begin
+      // Load data based on ready valid handshake
+      if (instruction_valid && instruction_ready) begin
+        address_register <= address_input;
+        length_register <= length_input;
+        cycles_counter <= cycles_input;
+      end else if (cycle_counter != 0) begin
+        // Decrement cycles counter (decrease right after "last" is asserted)
+        if (last && processor_input_valid && processor_input_ready) begin
+          cycles_counter <= cycles_counter - 1;
+        end
+      end
     end 
   end
+  // Receive new instructions when counter reaches 0
+  assign instruction_ready = cycle_counter == 0;
+
+  /********************
+   * Read from memory *
+   ********************/
+  // Read from memory as long as we are operating. Only read until counter reaches length of values we need to read. 
+  logic [MEMORY_INPUT_COUNTER_BITS-1:0] memory_reading_counter; // to count if we have read enough data from memory (always represent number of values written in buffer)
+  logic [DATA_WIDTH-1:0] memory_buffer_registers[M * N - 1 : 0]; // Flat buffer, we send memory_buffer_registers[N * (i+1) - 1 : N * i]
+  // We don't need to clear the memory registers on reset, just have to not access it
+  always_ff @(posedge clk) begin : read_from_memory
+    if (reset) begin
+      memory_reading_counter <= '0;
+    end else if (cycles_counter != 0) begin
+      // In operation, check if enough memory has been read. If not, read it.
+      if (memory_reading_counter < length_register * N) begin
+        // TODO: we are really assuming N and M are integer multiples... of PARALLEL_DATA_STREAMING_SIZE
+        memory_reading_counter <= memory_reading_counter + PARALLEL_DATA_STREAMING_SIZE; 
+        memory_buffer_registers[memory_reading_counter+PARALLEL_DATA_STREAMING_SIZE-1 : memory_reading_counter] = memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+      end
+    end
+  end
+  assign memory_address = address_register + memory_reading_counter;
+
+  /**********************
+   * Write to processor *
+   **********************/
+  // Count number of vectors successfully written. Valid when there are sufficient number in buffer to output. Last when counter reached len_reg-1
+  logic [COUNTER_BITS-1:0] processor_writing_counter; // to count if we have written enough data to processor, count the number of data successfully written in this cycle
+  // TODO if this is critical path, consider using count down (add some sort of reset to processor_writing_counter <= length_register-1 when first set - instruction valid and ready maybe?)
+  // TODO: down side: then the memory buffer registers' reading will be difficult. 
+  always_ff @(posedge clk) begin : write_to_processor
+    if (reset) begin
+      processor_writing_counter <= 0;
+    end else if (processor_input_ready && processor_input_valid) begin
+      // Increase the counter (if at end cycle back)
+      if (last) begin
+        // cycle back
+        processor_writing_counter <= 0;
+      end else begin
+        processor_writing_counter <= processor_writing_counter + 1;
+      end
+    end
+  end
+  assign processor_input_valid = memory_reading_counter >= (processor_writing_counter+1) * N;
+  assign processor_input_data = memory_buffer_registers[(processor_writing_counter+1)*N - 1 : processor_writing_counter*N];
+  assign last = processor_writing_counter == length_register-1; // when counter is len-1, the next number is last.
 endmodule
