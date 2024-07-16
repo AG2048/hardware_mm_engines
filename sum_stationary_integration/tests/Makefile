@@ -8,7 +8,7 @@ PWD=$(shell pwd)
 
 # Matrix parameters
 DATA_WIDTH ?= 8
-N ?= 4    
+N ?= 4
 MULTIPLY_DATA_WIDTH ?= 16
 ACCUM_DATA_WIDTH ?= 16
 

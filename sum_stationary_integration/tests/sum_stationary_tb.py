@@ -17,7 +17,7 @@ from cocotb.runner import get_runner
 from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
-NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 2))
+NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 3))
 if cocotb.simulator.is_running():
     DATA_WIDTH = int(cocotb.top.DATA_WIDTH)
     N = int(cocotb.top.N)      
@@ -271,18 +271,47 @@ async def multiply_test(dut):
     # start tester after reset so we know it's in a good state
     tester.start()
 
-    dut._log.info("Test multiplication operations")
+    dut._log.info(f"Test multiplication operations for N={N}")
 
     # ready to listen:
     tester.output_reader.set_status(True)
 
     # Do multiplication operations
+    dut._log.info("Test multiplication for:\n\tN-length input\n\tSteady In/Out\n\tN/A")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=True, output_steady=True, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True)
+    
+    dut._log.info("Test multiplication for:\n\tN-length input\n\tUnsteady In/Out\n\tShort Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      output_by_row=True)
+    
+    dut._log.info("Test multiplication for:\n\tN-length input\n\tUnsteady In/Out\n\tLong Unsteady")
     await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
                       input_steady=False, output_steady=False, 
                       input_not_steady_long_time=True, output_not_steady_long_time=True,
                       output_by_row=True)
     
+    dut._log.info("Test multiplication for:\n\t2N-length input\n\tSteady In/Out\n\tN/A")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=True, output_steady=True, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True)
     
+    dut._log.info("Test multiplication for:\n\t2N-length input\n\tUnsteady In/Out\n\tShort Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      output_by_row=True)
+    
+    dut._log.info("Test multiplication for:\n\t2N-length input\n\tUnsteady In/Out\n\tLong Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True)
 
 
 def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) -> List[List[int]]:
@@ -328,12 +357,12 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     expected_outputs = []
     # Generate matrix A and B based on input
     for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples))):
-        dut._log.info(f"operation {i}")
+        # dut._log.info(f"operation {i}")
         matrix_product_temp = matrix_multiplication(A, B)
         if not output_by_row:
             matrix_product_temp_transposed = [[matrix_product_temp[i][j] for i in outer_dimension] for j in outer_dimension]
         expected_outputs.append(matrix_product_temp if output_by_row else matrix_product_temp_transposed)
-        dut._log.info(f"Input: {A}, {B}")
+        # dut._log.info(f"Input: {A}, {B}")
         # Fit all data to the input writer first (all num_samples)
         # add random gaps if input won't be all valid
         # A matrix input gen
@@ -432,7 +461,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
 
         # dut._log.info(f"input ready : {dut.input_ready.value}")
 
-        # This was used to "timeout" when debugging
+        # # This was used to "timeout" when debugging
         # cycle_count += 1
         # if cycle_count > 60:
         #     raise Exception("done")
@@ -442,8 +471,11 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
             C[-1].append((await tester.output_reader.values.get())["c_data_streaming"])
             # dut._log.info(f"C: {C}")
         # dut._log.info(f"num_collected {num_collected}")
-        if len(C[-1]) >= inner_dimension:
+        if len(C[-1]) >= outer_dimension:
             num_collected += 1
+            # Run the comparison test here:
+            dut._log.info(f"Successful Number: {num_collected}")
+            assert expected_outputs[num_collected-1] == C[-1]
             C.append([])
         if num_collected >= num_samples:
             # dut._log.info(f"Should have been set around here---------------")
@@ -451,23 +483,20 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
             continue
         # dut._log.info(f"all_output_collected: {all_output_collected}")
     
-    # Run comparison code
-    successful = True
-    for (expected_output, actual_result) in zip(expected_outputs, C):
-        dut._log.info("Expected")
-        dut._log.info([[val.integer for val in row] for row in expected_output])
-        dut._log.info("Actual")
-        dut._log.info([[val.integer for val in row] for row in actual_result])
-        # try:
-        assert expected_output == actual_result
-        # except Exception as e:
-            
-        #     raise Exception(e)
-    print("Test Successful?", successful)
+    # # Run comparison code
+    # count = 1
+    # for (expected_output, actual_result) in zip(expected_outputs, C):
+    #     # dut._log.info("Expected")
+    #     # dut._log.info([[val.integer for val in row] for row in expected_output])
+    #     # dut._log.info("Actual")
+    #     # dut._log.info([[val.integer for val in row] for row in actual_result])
+    #     dut._log.info(f"Successful Number: {count}")
+    #     count += 1
+    #     assert expected_output == actual_result
 
 
 def create_matrix(func, rows, cols):
-    return [[func(DATA_WIDTH) for row in range(rows)] for col in range(cols)]
+    return [[func(DATA_WIDTH) for col in range(cols)] for row in range(rows)]
 
 def create_row(length, func=getrandbits):
     return [func(DATA_WIDTH) for _ in range(length)]
