@@ -3,8 +3,8 @@
 */output_files
 */simulation
 
-*/sim_build
-*/__pycache__
-*/modelsim.ini
-*/results.xml
-*/transcript
+sum_stationary_integration/tests/sim_build
+sum_stationary_integration/tests/__pycache__
+sum_stationary_integration/tests/modelsim.ini
+sum_stationary_integration/tests/results.xml
+sum_stationary_integration/tests/transcript
