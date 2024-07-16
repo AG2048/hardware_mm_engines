@@ -17,7 +17,7 @@ from cocotb.runner import get_runner
 from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
-NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 3))
+NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 5))
 if cocotb.simulator.is_running():
     DATA_WIDTH = int(cocotb.top.DATA_WIDTH)
     N = int(cocotb.top.N)      
@@ -312,6 +312,43 @@ async def multiply_test(dut):
                       input_steady=False, output_steady=False, 
                       input_not_steady_long_time=True, output_not_steady_long_time=True,
                       output_by_row=True)
+    
+    # Here we limit test some edge case of max input (11111111...)
+    dut._log.info("Test max input multiplication for:\n\tN-length input\n\tSteady In/Out\n\tN/A")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=True, output_steady=True, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
+    
+    dut._log.info("Test max input multiplication for:\n\tN-length input\n\tUnsteady In/Out\n\tShort Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
+    
+    dut._log.info("Test max input multiplication for:\n\tN-length input\n\tUnsteady In/Out\n\tLong Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
+    
+    dut._log.info("Test max input multiplication for:\n\t2N-length input\n\tSteady In/Out\n\tN/A")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=True, output_steady=True, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
+    
+    dut._log.info("Test max input multiplication for:\n\t2N-length input\n\tUnsteady In/Out\n\tShort Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=False, output_not_steady_long_time=False,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
+    
+    dut._log.info("Test max input multiplication for:\n\t2N-length input\n\tUnsteady In/Out\n\tLong Unsteady")
+    await test_matrix_write(tester, dut, num_samples=NUM_SAMPLES, outer_dimension=N, inner_dimension=2*N, 
+                      input_steady=False, output_steady=False, 
+                      input_not_steady_long_time=True, output_not_steady_long_time=True,
+                      output_by_row=True, matrix_gen_func=lambda x:2**DATA_WIDTH-1)
 
 
 def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) -> List[List[int]]:
@@ -342,7 +379,7 @@ def matrix_multiplication(a_matrix: List[List[int]], b_matrix: List[List[int]]) 
 async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int, inner_dimension: int, 
                       input_steady: bool, output_steady: bool, 
                       input_not_steady_long_time: bool, output_not_steady_long_time: bool,
-                      output_by_row: bool = True):
+                      output_by_row: bool = True, matrix_gen_func=getrandbits):
     """
     repeat num_samples time, do outer_dimension x inner_dimension * inner_dimension * outer_dimension matrix
     N = outer_dimension here
@@ -356,7 +393,7 @@ async def test_matrix_write(tester, dut, num_samples: int, outer_dimension: int,
     dut.output_by_row.value = output_by_row  # Output based on row or col
     expected_outputs = []
     # Generate matrix A and B based on input
-    for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples))):
+    for i, (A, B) in enumerate(zip(gen_matrices(outer_dimension, inner_dimension, num_samples=num_samples, func=matrix_gen_func), gen_matrices(inner_dimension, outer_dimension, num_samples=num_samples, func=matrix_gen_func))):
         # dut._log.info(f"operation {i}")
         matrix_product_temp = matrix_multiplication(A, B)
         if not output_by_row:
