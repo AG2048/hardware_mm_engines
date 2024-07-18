@@ -59,6 +59,7 @@ module output_memory_writer #(
       processor_read_counter <= '0;
       output_by_row_instruction_register <= '0;
       in_operation_register <= '0;
+      // TODO: change the 2nd condition to an "else if", which sets completed valid to true. then in the else block, have some sort of waiting statement that prevents any action until completion ready is set
     end else begin
       // Load data based on ready valid handshake
       if (instruction_valid && instruction_ready) begin
