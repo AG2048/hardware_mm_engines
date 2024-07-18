@@ -10,7 +10,7 @@
 
 module simple_memory #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
-  parameter int PARALLEL_DATA_STREAMING_SIZE = 4, // It can output 4 numbers at same time TODO: always divisor of SIZE...
+  parameter int PARALLEL_DATA_STREAMING_SIZE = 4, // It can output 4 numbers at same time TODO: always divisor of SIZE... TODO: also divisor of N (so we write to memory in integer cycles)
   parameter int SIZE = 1024,      // How many numbers of DATA_WIDTH it can store
   parameter int ADDRESS_BITS = $clog2(SIZE + 1) // Address is corresponding to SIZE to 0
 ) (
