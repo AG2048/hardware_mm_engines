@@ -17,6 +17,7 @@ from cocotb.runner import get_runner
 from cocotb.triggers import RisingEdge, First
 
 # Set num samples to 3000 if not defined in Makefile
+# Read parameters from sim parameters
 NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 5))
 if cocotb.simulator.is_running():
     DATA_WIDTH = int(cocotb.top.DATA_WIDTH)
@@ -28,7 +29,7 @@ if cocotb.simulator.is_running():
 #   reader(ready=True/False) - and it logs whatever value it read
 class LIReader:
     def __init__(self, dut: SimHandleBase, clk: SimHandleBase, signals: Dict[str, SimHandleBase], valid: SimHandleBase, ready: SimHandleBase):
-        self.values = Queue[Dict[str, int]]()
+        self.values = Queue[Dict[str, int]]()  # {'signal_name': value}, signals=dict(c_data_streaming=self.dut.c_data_streaming),
         self._dut = dut
         self._clk = clk
         self._signals = signals
@@ -54,6 +55,11 @@ class LIReader:
         self._ready.value = 1 if ready else 0
 
     async def _run(self) -> None:
+        """
+        At rising edge (after the edge), check if valid AND ready. If so, read the value.
+        If at the edge, not ready or not valid, then we wait until one of them changes, and wait till next edge. 
+        If at edge ready and valid, we read values. 
+        """
         while True:
             await RisingEdge(self._clk)
             if self._valid.value.binstr != "1" or self._ready.value.binstr != "1":
@@ -109,6 +115,7 @@ class LIWriter:
         False data will remain false for 1 clock edge
 
         (added last boolean to be the "last" signal)
+        ([data...], valid, last)
         """
         self.values.put_nowait(input_data_and_valid)
 
@@ -116,26 +123,34 @@ class LIWriter:
         """
         Goal: iterate thru values, and write. If true, do proper wait. If False, wait a random number of cycles.
         """
+        # Initialize the input values. 
         if self.values.empty():
             input_value, do_input, is_last = [0 for _ in range(self._input_length)], False, False
         else:
             input_value, do_input, is_last = await self.values.get()
+        
         while True:
-            # self._dut._log.info(f"input_value: {input_value}, do_input: {do_input}")
+            # Set signals to our values.
             self._signals.value = input_value
             self._valid.value = do_input
+
+            # If this writer does send the "last" signal, then we set the last signal. 
             if self._sends_last:
                 self._last.value = is_last
+            
+            # if we are sending valid data, we are waiting for clock edge and ready signal. 
             if do_input:
                 # We are writing
                 # After rising edge, check if ready. If ready, then switch value
                 # if not ready, wait until ready is asserted, then change value on next rising edge
                 while True:
+                    # wait for edge
                     await RisingEdge(self._clk)
-                    # self._dut._log.info(f"self._ready.value.binstr: {self._ready.value.binstr}")
+                    # if we read ready (assume device have taken the data)
                     if self._ready.value.binstr == "1":
                         break
                     else:
+                        # We didn't read ready signal, we wait until ready is set and then wait for clock edge. 
                         await RisingEdge(self._ready)
             else:
                 # We are not writing
@@ -215,7 +230,7 @@ class MatrixMultiplierTester:
         self.output_reader = LIReader(
             dut=self.dut,
             clk=self.dut.clk, 
-            signals=dict(c_data_streaming=self.dut.c_data_streaming),
+            signals=dict(c_data_streaming=self.dut.c_data_streaming),  # the c_data_streaming= tells name of the dict value
             valid=self.dut.output_valid, 
             ready=self.dut.output_ready
         )
@@ -548,59 +563,3 @@ def gen_matrices(rows, cols, num_samples=NUM_SAMPLES, func=getrandbits):
     """Generate random matrix data for matrices of set dimensions"""
     for _ in range(num_samples):
         yield create_matrix(func, rows, cols)
-
-
-def test_matrix_multiplier_runner():
-    """Simulate the matrix_multiplier example using the Python runner.
-
-    This file can be run directly or via pytest discovery.
-    """
-    hdl_toplevel_lang = os.getenv("HDL_TOPLEVEL_LANG", "verilog")
-    sim = os.getenv("SIM", "modelsim")
-
-    proj_path = Path(__file__).resolve().parent.parent
-
-    verilog_sources = []
-    vhdl_sources = []
-    build_args = []
-
-    verilog_sources = [proj_path / "hdl" / "sum_stationary.sv"]
-
-    # if sim in ["riviera", "activehdl"]:
-    #     build_args = ["-sv2k12"]
-
-    extra_args = []
-    # if sim == "ghdl":
-    #     extra_args = ["--std=08"]
-
-    parameters = {
-        "DATA_WIDTH": int(os.getenv("DATA_WIDTH", "8")),
-        "N": int(os.getenv("N", "4")),
-        "MULTIPLY_DATA_WIDTH": int(os.getenv("MULTIPLY_DATA_WIDTH", "16")),
-        "ACCUM_DATA_WIDTH": int(os.getenv("ACCUM_DATA_WIDTH", "16")),
-    }
-
-    # equivalent to setting the PYTHONPATH environment variable
-    sys.path.append(str(proj_path / "tests"))
-
-    runner = get_runner(sim)
-
-    runner.build(
-        hdl_toplevel="sum_stationary",
-        verilog_sources=verilog_sources,
-        vhdl_sources=vhdl_sources,
-        build_args=build_args + extra_args,
-        parameters=parameters,
-        always=True,
-    )
-
-    runner.test(
-        hdl_toplevel="sum_stationary",
-        hdl_toplevel_lang=hdl_toplevel_lang,
-        test_module="sum_stationary_tb",
-        test_args=extra_args,
-    )
-
-
-if __name__ == "__main__":
-    test_matrix_multiplier_runner()
