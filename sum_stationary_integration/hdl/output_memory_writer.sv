@@ -43,23 +43,31 @@ module output_memory_writer #(
    ************************/
   // Define Registers
   logic [MEMORY_ADDRESS_BITS-1:0] address_register; // remember the memory address after receiving from controller
-  logic [COUNTER_BITS-1:0] processor_read_counter; // Counts how many times data is read from module
+  logic [COUNTER_BITS-1:0] processor_read_counter; // Counts how many times data is read from module (from 0 to N-1)
   logic output_by_row_instruction_register;
   logic in_operation_register; // Tell module if we should be reading from processor / writing to memory // TODO is this used?
+  logic completed_register; // remember if all operations have been completed
 
   // Always FF Block
   always_ff @(posedge clk) begin : read_from_controller
     if (reset || (processor_read_counter == N-1 && memory_write_counter == N-PARALLEL_DATA_STREAMING_SIZE && write_valid && write_ready)) begin
       /* Reset when:
-       *  we are on last cycle
-       *  we are writing the last value
-       *  It's valid and ready
+       *  We have finished reading the last value from processor
+       *  we are currently ready to write the last bit of value to memory (N-StreamingSize)
+       *  Ready and valid to write (the clock cycle the memory will have been written the value)
        */
       address_register <= '0;
       processor_read_counter <= '0;
       output_by_row_instruction_register <= '0;
       in_operation_register <= '0;
-      // TODO: change the 2nd condition to an "else if", which sets completed valid to true. then in the else block, have some sort of waiting statement that prevents any action until completion ready is set
+      // Set done flag to true or false
+      if (reset) begin
+        // Reset then we reset completed_register
+        completed_register <= '0;
+      end else begin
+        // We reached here because we finished data transfer
+        completed_register <= '1;
+      end
     end else begin
       // Load data based on ready valid handshake
       if (instruction_valid && instruction_ready) begin
@@ -68,11 +76,19 @@ module output_memory_writer #(
         in_operation_register <= '1;
       end
       if (output_valid && output_ready) begin
-        // Increase the counter when we write
+        // Increase the counter when we read from processor
         processor_read_counter <= processor_read_counter + 1;
+      end
+      if (completed_valid && completed_ready) begin
+        // Controller had read that we are done with writing
+        completed_register <= '0;
       end
     end 
   end
+  // Read instruction if we are not DONE, and not in operation. 
+  assign instruction_ready = !completed_register && !in_operation_register;
+  // We valid completed when we completed...
+  assign completed_valid = completed_register;
 
   /*******************************************
    * Read from Processor and Write to Memory *
@@ -133,9 +149,4 @@ module output_memory_writer #(
   for (int i = 0; i < PARALLEL_DATA_STREAMING_SIZE; i++) begin
     write_data[i] = output_writer_buffer[memory_write_counter + i];
   end
-
-  /*******************
-   * Write to Memory *
-   *******************/
-
 endmodule
