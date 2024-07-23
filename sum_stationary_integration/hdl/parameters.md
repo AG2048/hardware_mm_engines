@@ -20,4 +20,6 @@ parameter int MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1) // F
 parameter int CYCLE_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH/N) + 1) // keep track of how many full data cycles are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)
 
 ## Notes:
-I should probably make N % PARALLEL_DATA_STREAMING_SIZE == 0
+I should probably make N % PARALLEL_DATA_STREAMING_SIZE == 0 (somehow assert it?)
+
+Also I need to add some better memory modules
