@@ -29,6 +29,10 @@ module memory_buffer #(
   input   logic                           previous_done_reading_valid,
   output  logic                           previous_done_reading_ready,
 
+  // Make sure unit access memory after another
+  output   logic                          current_done_reading_valid,
+  input  logic                            current_done_reading_ready,
+
   // Communicating with memory to read data (TODO: assuming memory read have no delay)
   output  logic [MEMORY_ADDRESS_BITS-1:0] memory_address, // address we are telling the memory we are reading from
   input   logic [DATA_WIDTH-1:0]          memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
@@ -94,20 +98,34 @@ module memory_buffer #(
   // Read from memory as long as we are operating. Only read until counter reaches length of values we need to read. 
   logic [MEMORY_INPUT_COUNTER_BITS-1:0] memory_reading_counter; // to count if we have read enough data from memory (always represent number of values written in buffer)
   logic [DATA_WIDTH-1:0] memory_buffer_registers[M * N - 1 : 0]; // Flat buffer, we send memory_buffer_registers[N * (i+1) - 1 : N * i]
+  // Remember if we have done reading
+  logic current_done_reading;
   // We don't need to clear the memory registers on reset, just have to not access it
   always_ff @(posedge clk) begin : read_from_memory
     if (reset) begin
       memory_reading_counter <= '0;
+      current_done_reading <= '0;
     end else if (repeats_counter != 0 && previous_done_reading) begin // Repeats counter being an indication of in-operation
       // In operation, check if enough memory has been read. If not, read it.
       if (memory_reading_counter < length_register * N) begin
         // TODO: we are really assuming N and M are integer multiples... of PARALLEL_DATA_STREAMING_SIZE
         memory_reading_counter <= memory_reading_counter + PARALLEL_DATA_STREAMING_SIZE; 
         memory_buffer_registers[memory_reading_counter+PARALLEL_DATA_STREAMING_SIZE-1 : memory_reading_counter] = memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+        if (memory_reading_counter + PARALLEL_DATA_STREAMING_SIZE == length_register * N) begin
+          current_done_reading <= '1; // Done reading when counter reaches result
+        end
+      end else begin
+        // Memory reading is completed, can tell next block we are completed
+        if (current_done_reading_ready && current_done_reading_valid) begin
+          current_done_reading <= '0; // Once written to next telling we are done, we don't have to remember we are done reading anymore. 
+        end
       end
     end
   end
   assign memory_address = address_register + memory_reading_counter;
+  
+  // Write we are done reading if we are done reading
+  assign current_done_reading_valid = current_done_reading;
 
   /**********************
    * Write to processor *
