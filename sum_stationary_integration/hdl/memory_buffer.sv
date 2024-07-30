@@ -25,6 +25,10 @@ module memory_buffer #(
   input   logic [COUNTER_BITS-1:0]        length_input, // How big is the input, we will send matrix multiplication of [N x length_input] * [length_input x N]
   input   logic [REPEATS_COUNTER_BITS-1:0]  repeats_input, // How many times the full buffer will be sent to processor before accepting new instructions. (for data reuse)
 
+  // Make sure unit access memory after another
+  input   logic                           previous_done_reading_valid,
+  output  logic                           previous_done_reading_ready,
+
   // Communicating with memory to read data (TODO: assuming memory read have no delay)
   output  logic [MEMORY_ADDRESS_BITS-1:0] memory_address, // address we are telling the memory we are reading from
   input   logic [DATA_WIDTH-1:0]          memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
@@ -42,6 +46,7 @@ module memory_buffer #(
   logic [MEMORY_ADDRESS_BITS-1:0] address_register; // remember the memory address after receiving from controller
   logic [COUNTER_BITS-1:0] length_register; // remember the length of input matrix after receiving from controller
   logic [REPEATS_COUNTER_BITS-1:0] repeats_counter; // to count how many times the full data is sent (used to set ready signals with controller)
+  logic previous_done_reading; // Signal checking if the previous input buffer is done reading from memory
   // Always FF Block
   always_ff @(posedge clk) begin : read_from_controller
     if (reset || (repeats_counter == 1 && last && processor_input_valid && processor_input_ready)) begin
@@ -53,22 +58,35 @@ module memory_buffer #(
       address_register <= '0;
       length_register <= '0;
       repeats_counter <= '0;
+      previous_done_reading <= '0;
     end else begin
       // Load data based on ready valid handshake
       if (instruction_valid && instruction_ready) begin
         address_register <= address_input;
         length_register <= length_input;
         repeats_counter <= repeats_input;
+        previous_done_reading <= '0;
       end else if (repeats_counter != 0) begin
         // Decrement repeats counter (decrease right after "last" is asserted)
         if (last && processor_input_valid && processor_input_ready) begin
           repeats_counter <= repeats_counter - 1;
         end
       end
+
+      // Check if previous is done:
+      if (previous_done_reading_valid && previous_done_reading_ready) begin
+        previous_done_reading <= '1;
+      end
     end 
   end
   // Receive new instructions when counter reaches 0
   assign instruction_ready = repeats_counter == 0;
+  // We ready when we have not read previous_done, and we are not in reset logic. TODO: copied from the first ff code
+  assign previous_done_reading_ready = ~previous_done_reading && ~(reset || (repeats_counter == 1 && last && processor_input_valid && processor_input_ready))
+
+  /************************************
+   * Previous Buffer Finished Reading *
+   ************************************/
 
   /********************
    * Read from memory *
@@ -80,7 +98,7 @@ module memory_buffer #(
   always_ff @(posedge clk) begin : read_from_memory
     if (reset) begin
       memory_reading_counter <= '0;
-    end else if (repeats_counter != 0) begin
+    end else if (repeats_counter != 0 && previous_done_reading) begin // Repeats counter being an indication of in-operation
       // In operation, check if enough memory has been read. If not, read it.
       if (memory_reading_counter < length_register * N) begin
         // TODO: we are really assuming N and M are integer multiples... of PARALLEL_DATA_STREAMING_SIZE
