@@ -26,6 +26,7 @@ module controller #(
   parameter int MAX_MATRIX_LENGTH = 4096,  // Assume the max matrix we will do is 4k
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change
+  parameter int MATRIX_LENGTH_BITS = $clog2(MAX_MATRIX_LENGTH+1), // bits to store max matrix length
 
   parameter int ROWS_PROCESSORS = 1, // How many rows of processing units are there (number of A input buffers)
   parameter int COLS_PROCESSORS = 1, // How many cols of processing units are there (number of B input buffers)
@@ -45,8 +46,9 @@ module controller #(
   input   logic [MEMORY_ADDRESS_BITS-1:0] a_memory_addr,
   input   logic [MEMORY_ADDRESS_BITS-1:0] b_memory_addr,
   input   logic [MEMORY_ADDRESS_BITS-1:0] c_memory_addr,
-  input   logic                           instruction_valid,
-  output  logic                           instruction_ready,
+  input   logic [MATRIX_LENGTH_BITS-1:0]  matrix_length_input,
+  input   logic                           instruction_valid, // Tell if memory addr is received or not
+  output  logic                           instruction_ready, // Tell if memory addr is received or not
   output  logic                           done,            // When the result in C is correct
 
   // TODO, temp using many memory bus for module I/O
@@ -72,6 +74,33 @@ module controller #(
   output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_write_address[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
 
 );
+  /************************
+   * GENERAL INSTRUCTIONS *
+   ************************/
+  logic done_register, in_operation_register, a_addr_register, b_addr_register, c_addr_register, matrix_length_register;
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      in_operation_register <= '0;
+      done_register <= '0;
+    end else begin
+      if (instruction_ready && instruction_valid) begin
+        // Read in new instruction, set in_ops to true
+        in_operation_register <= '1;
+        a_addr_register <= a_memory_addr;
+        b_addr_register <= b_memory_addr;
+        c_addr_register <= c_memory_addr;
+        matrix_length_register <= matrix_length_input;
+        done_register <= '0;
+      end else if (...) begin // TODO: define the logic condition for this
+        // If all output buffer have completed their last output task:
+        in_operation_register <= '0;
+        done_register <= '1;
+      end
+    end
+  end
+  assign instruction_ready = ~in_operation_register;
+  assign done = done_register;
+
   /*
   Blocks:
 
@@ -92,63 +121,6 @@ module controller #(
     Define output buffers, connect to memory
   */
 
-  // /*****************
-  //  * DEFINE MEMORY *
-  //  *****************/
-  // logic a_memory_write_valid, a_memory_write_ready;
-  // logic [MEMORY_ADDRESS_BITS-1:0] a_memory_write_address, a_memory_read_address;
-  // logic [DATA_WIDTH-1:0] a_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], a_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  // simple_memory #(
-  //   .DATA_WIDTH(DATA_WIDTH),
-  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-  //   .SIZE(MEMORY_SIZE), 
-  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  // ) u_a_memory (
-  //   .clk(clk),
-  //   .write_valid(a_memory_write_valid),
-  //   .write_ready(a_memory_write_ready),
-  //   .write_address(a_memory_write_address),
-  //   .write_data(a_memory_write_data),
-  //   .read_address(a_memory_read_address),
-  //   .read_data(a_memory_read_data)
-  // );
-
-  // logic b_memory_write_valid, b_memory_write_ready;
-  // logic [MEMORY_ADDRESS_BITS-1:0] b_memory_write_address, b_memory_read_address;
-  // logic [DATA_WIDTH-1:0] b_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], b_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  // simple_memory #(
-  //   .DATA_WIDTH(DATA_WIDTH),
-  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-  //   .SIZE(MEMORY_SIZE), 
-  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  // ) u_b_memory (
-  //   .clk(clk),
-  //   .write_valid(b_memory_write_valid),
-  //   .write_ready(b_memory_write_ready),
-  //   .write_address(b_memory_write_address),
-  //   .write_data(b_memory_write_data),
-  //   .read_address(b_memory_read_address),
-  //   .read_data(b_memory_read_data)
-  // );
-
-  // logic c_memory_write_valid, c_memory_write_ready;
-  // logic [MEMORY_ADDRESS_BITS-1:0] c_memory_write_address, c_memory_read_address;
-  // logic [DATA_WIDTH-1:0] c_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], c_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  // simple_memory #(
-  //   .DATA_WIDTH(DATA_WIDTH),
-  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-  //   .SIZE(MEMORY_SIZE), 
-  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  // ) u_c_memory (
-  //   .clk(clk),
-  //   .write_valid(c_memory_write_valid),
-  //   .write_ready(c_memory_write_ready),
-  //   .write_address(c_memory_write_address),
-  //   .write_data(c_memory_write_data),
-  //   .read_address(c_memory_read_address),
-  //   .read_data(c_memory_read_data)
-  // );
-
   /***********************
    * DEFINE INPUT BUFFER *
    ***********************/
@@ -158,6 +130,13 @@ module controller #(
   logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_address_inputs[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_COUNTER_BITS-1:0] a_input_buffer_length_inputs[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_repeats_inputs[ROWS_PROCESSORS-1:0];
+  /* TODO:
+    instruction valid should be "in-progress"
+    address / length / repeats inputs should be defined at same time (probably in an always_ff block at same time as valid)
+    ^ should be register
+
+
+  */
   // Communicate with processor
   logic a_input_valid[ROWS_PROCESSORS-1:0];
   logic a_input_ready[ROWS_PROCESSORS-1:0]; // Value Assigned with processor
@@ -298,8 +277,25 @@ module controller #(
   logic [MEMORY_ADDRESS_BITS-1:0] output_buffer_address_inputs[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
   logic output_buffer_by_row_instructions[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
 
+  /* TODO:
+    instruction valid should be "in-progress"
+    address / by row inputs should be defined at same time (probably in an always_ff block at same time as valid)
+    ^ should be register
+
+
+  */
+
   logic output_buffer_completed_readys[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
   logic output_buffer_completed_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+
+  /* TODO:
+    ready should be "in-progress" - AND count not at max?
+    increment a counter for each tile. 
+
+    if count at max, set "buffer completely done" to true
+
+  */
+
 
   logic processor_output_by_row[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
 
@@ -337,47 +333,4 @@ module controller #(
       end
     end
   endgenerate
-
-  
-
-some signals to be defined:
-  a memory addr, b memory addr, c memory addr registers
-  in_operation
-// Communicate with the control module delivering address to buffer
-  input   logic                           a_address_valids[ROWS_PROCESSORS],
-  output  logic                           a_address_readys[ROWS_PROCESSORS],
-  input   logic [MEMORY_ADDRESS_BITS-1:0] a_address_inputs[ROWS_PROCESSORS],
-
-  input   logic                           b_address_valids[COLS_PROCESSORS],
-  output  logic                           b_address_readys[COLS_PROCESSORS],
-  input   logic [MEMORY_ADDRESS_BITS-1:0] b_address_inputs[COLS_PROCESSORS],
-
-  input   logic                           c_address_valids[ROWS_PROCESSORS][COLS_PROCESSORS],
-  output  logic                           c_address_readys[ROWS_PROCESSORS][COLS_PROCESSORS],
-  input   logic [MEMORY_ADDRESS_BITS-1:0] c_address_inputs[ROWS_PROCESSORS][COLS_PROCESSORS],
-
-  repeat for length, and cycle     (not for C)
-
-  general block:
-    ff: clear A,B,C memory addr registers, in_operation = False, done = False
-    if input valid and ready, load in 3 values and set in_operation to true.
-    if done: in_operation is false
-    if (that C flag counter == 0, done <= 1)
-
-    input ready: when in_operation is false
-
-  A blocks:
-    ff: if ready and valid, send corresponding values. (values = calculated value, or we can store it to a register to speed up logic)
-
-    valid: when in operation, and the value is correct
-
-    when general input ready/valid, initialize some values (reset values)
-  B blocks:
-
-  C blocks:
-    ff: if ready and valid, send corresponding values. 
-    have a flag register for "all C writer that are finally done" (or a counter works, just count down for every C output writer that claims ready, but is done)
-
-
-
 endmodule
