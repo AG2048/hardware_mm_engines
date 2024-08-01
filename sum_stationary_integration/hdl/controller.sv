@@ -47,7 +47,30 @@ module controller #(
   input   logic [MEMORY_ADDRESS_BITS-1:0] c_memory_addr,
   input   logic                           instruction_valid,
   output  logic                           instruction_ready,
-  output  logic                           done            // When the result in C is correct
+  output  logic                           done,            // When the result in C is correct
+
+  // TODO, temp using many memory bus for module I/O
+  input   logic [DATA_WIDTH-1:0]          input_memory_a_read_bus[ROWS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  input   logic [DATA_WIDTH-1:0]          input_memory_b_read_bus[COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  input   logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_read_bus[ROWS_PROCESSORS*COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_a_read_address[ROWS_PROCESSORS-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_b_read_address[COLS_PROCESSORS-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_read_address[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+
+  output  logic   input_memory_a_write_valids[ROWS_PROCESSORS-1:0],
+  output  logic   input_memory_b_write_valids[COLS_PROCESSORS-1:0],
+  input   logic   input_memory_a_write_readys[ROWS_PROCESSORS-1:0],
+  input   logic   input_memory_b_write_readys[COLS_PROCESSORS-1:0],
+  output  logic   output_memory_write_valids[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+  input   logic   output_memory_write_readys[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+
+  output  logic [DATA_WIDTH-1:0]          input_memory_a_write_bus[ROWS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  output  logic [DATA_WIDTH-1:0]          input_memory_b_write_bus[COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  output  logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_write_bus[ROWS_PROCESSORS*COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_a_write_address[ROWS_PROCESSORS-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_b_write_address[COLS_PROCESSORS-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_write_address[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+
 );
   /*
   Blocks:
@@ -69,62 +92,62 @@ module controller #(
     Define output buffers, connect to memory
   */
 
-  /*****************
-   * DEFINE MEMORY *
-   *****************/
-  logic a_memory_write_valid, a_memory_write_ready;
-  logic [MEMORY_ADDRESS_BITS-1:0] a_memory_write_address, a_memory_read_address;
-  logic [DATA_WIDTH-1:0] a_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], a_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  simple_memory #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-    .SIZE(MEMORY_SIZE), 
-    .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  ) u_a_memory (
-    .clk(clk),
-    .write_valid(a_memory_write_valid),
-    .write_ready(a_memory_write_ready),
-    .write_address(a_memory_write_address),
-    .write_data(a_memory_write_data),
-    .read_address(a_memory_read_address),
-    .read_data(a_memory_read_data)
-  );
+  // /*****************
+  //  * DEFINE MEMORY *
+  //  *****************/
+  // logic a_memory_write_valid, a_memory_write_ready;
+  // logic [MEMORY_ADDRESS_BITS-1:0] a_memory_write_address, a_memory_read_address;
+  // logic [DATA_WIDTH-1:0] a_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], a_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+  // simple_memory #(
+  //   .DATA_WIDTH(DATA_WIDTH),
+  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+  //   .SIZE(MEMORY_SIZE), 
+  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
+  // ) u_a_memory (
+  //   .clk(clk),
+  //   .write_valid(a_memory_write_valid),
+  //   .write_ready(a_memory_write_ready),
+  //   .write_address(a_memory_write_address),
+  //   .write_data(a_memory_write_data),
+  //   .read_address(a_memory_read_address),
+  //   .read_data(a_memory_read_data)
+  // );
 
-  logic b_memory_write_valid, b_memory_write_ready;
-  logic [MEMORY_ADDRESS_BITS-1:0] b_memory_write_address, b_memory_read_address;
-  logic [DATA_WIDTH-1:0] b_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], b_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  simple_memory #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-    .SIZE(MEMORY_SIZE), 
-    .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  ) u_b_memory (
-    .clk(clk),
-    .write_valid(b_memory_write_valid),
-    .write_ready(b_memory_write_ready),
-    .write_address(b_memory_write_address),
-    .write_data(b_memory_write_data),
-    .read_address(b_memory_read_address),
-    .read_data(b_memory_read_data)
-  );
+  // logic b_memory_write_valid, b_memory_write_ready;
+  // logic [MEMORY_ADDRESS_BITS-1:0] b_memory_write_address, b_memory_read_address;
+  // logic [DATA_WIDTH-1:0] b_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], b_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+  // simple_memory #(
+  //   .DATA_WIDTH(DATA_WIDTH),
+  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+  //   .SIZE(MEMORY_SIZE), 
+  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
+  // ) u_b_memory (
+  //   .clk(clk),
+  //   .write_valid(b_memory_write_valid),
+  //   .write_ready(b_memory_write_ready),
+  //   .write_address(b_memory_write_address),
+  //   .write_data(b_memory_write_data),
+  //   .read_address(b_memory_read_address),
+  //   .read_data(b_memory_read_data)
+  // );
 
-  logic c_memory_write_valid, c_memory_write_ready;
-  logic [MEMORY_ADDRESS_BITS-1:0] c_memory_write_address, c_memory_read_address;
-  logic [DATA_WIDTH-1:0] c_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], c_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
-  simple_memory #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-    .SIZE(MEMORY_SIZE), 
-    .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
-  ) u_c_memory (
-    .clk(clk),
-    .write_valid(c_memory_write_valid),
-    .write_ready(c_memory_write_ready),
-    .write_address(c_memory_write_address),
-    .write_data(c_memory_write_data),
-    .read_address(c_memory_read_address),
-    .read_data(c_memory_read_data)
-  );
+  // logic c_memory_write_valid, c_memory_write_ready;
+  // logic [MEMORY_ADDRESS_BITS-1:0] c_memory_write_address, c_memory_read_address;
+  // logic [DATA_WIDTH-1:0] c_memory_write_data[PARALLEL_DATA_STREAMING_SIZE-1:0], c_memory_read_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+  // simple_memory #(
+  //   .DATA_WIDTH(DATA_WIDTH),
+  //   .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+  //   .SIZE(MEMORY_SIZE), 
+  //   .ADDRESS_BITS(MEMORY_ADDRESS_BITS) 
+  // ) u_c_memory (
+  //   .clk(clk),
+  //   .write_valid(c_memory_write_valid),
+  //   .write_ready(c_memory_write_ready),
+  //   .write_address(c_memory_write_address),
+  //   .write_data(c_memory_write_data),
+  //   .read_address(c_memory_read_address),
+  //   .read_data(c_memory_read_data)
+  // );
 
   /***********************
    * DEFINE INPUT BUFFER *
@@ -134,21 +157,56 @@ module controller #(
   logic a_input_buffer_instruction_readys[ROWS_PROCESSORS-1:0];
   logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_address_inputs[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_COUNTER_BITS-1:0] a_input_buffer_length_inputs[ROWS_PROCESSORS-1:0];
-  // Memory I/O
-  logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_memory_addresses[ROWS_PROCESSORS-1:0];
-  logic [DATA_WIDTH-1:0] a_input_buffer_memory_data[ROWS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0];
+  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_repeats_inputs[ROWS_PROCESSORS-1:0];
   // Communicate with processor
+  logic a_input_valid[ROWS_PROCESSORS-1:0];
+  logic a_input_ready[ROWS_PROCESSORS-1:0];
   logic [DATA_WIDTH-1:0] a_input_data[ROWS_PROCESSORS-1:0][N-1:0];
+  logic a_input_last[ROWS_PROCESSORS-1:0];
   generate
     genvar a_input_buffer_index;
     for (a_input_buffer_index = 0; a_input_buffer_index < ROWS_PROCESSORS; a_input_buffer_index++) begin : a_input_buffers
       memory_buffer #(
-        
+        .DATA_WIDTH(DATA_WIDTH),
+        .N(N),
+        .M(M),
+        .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
+        .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH)
+        // Ignoring "calculated" parameters
       ) u_a_memory_buffer (
+        .clk(clk),
+        .reset(reset),
 
+        .instruction_valid(a_input_buffer_instruction_valids[a_input_buffer_index]),
+        .instruction_ready(a_input_buffer_instruction_readys[a_input_buffer_index]),
+        .address_input(a_input_buffer_address_inputs[a_input_buffer_index]),
+        .length_input(a_input_buffer_length_inputs[a_input_buffer_index]),
+        .repeats_input(a_input_repeats_inputs[a_input_buffer_index]),
+        
+        .memory_address(input_memory_a_read_address[a_input_buffer_index]),
+        .memory_data(input_memory_a_read_bus[a_input_buffer_index]),
+
+        .processor_input_valid(a_input_valid[a_input_buffer_index]),
+        .processor_input_ready(a_input_ready[a_input_buffer_index]),
+        .processor_input_data(a_input_data[a_input_buffer_index]),
+        .last(a_input_last[a_input_buffer_index])
       )
     end
   endgenerate
+
+  /*********************
+   * DEFINE PROCESSORS *
+   *********************/
+  // TODO: find a way for memory buffers to write to ALL processors at same time.
+  // TODO: option: write a processor_relay_buffer. It stores result, and inject into processor WHEN:
+  // TODO:    DATA_SENT_TO_NEXT. BOTH_A_AND_B_HAVE_VALUE
+
+  /*************************
+   * DEFINE OUTPUT_BUFFERS *
+   *************************/
+  // TODO: define a grid of output buffer per processor.
+  // TODO: Add a similar type of "previous_done_writing"
 
   generate
     genvar i, j;
