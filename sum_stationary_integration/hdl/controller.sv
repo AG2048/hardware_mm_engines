@@ -152,7 +152,7 @@ module controller #(
   /***********************
    * DEFINE INPUT BUFFER *
    ***********************/
-  // Instruction Variables
+  // Instruction Variables TODO: have to define values to instruction valids and inputs
   logic a_input_buffer_instruction_valids[ROWS_PROCESSORS-1:0];
   logic a_input_buffer_instruction_readys[ROWS_PROCESSORS-1:0];
   logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_address_inputs[ROWS_PROCESSORS-1:0];
@@ -160,7 +160,7 @@ module controller #(
   logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_repeats_inputs[ROWS_PROCESSORS-1:0];
   // Communicate with processor
   logic a_input_valid[ROWS_PROCESSORS-1:0];
-  logic a_input_ready[ROWS_PROCESSORS-1:0];
+  logic a_input_ready[ROWS_PROCESSORS-1:0]; // Value Assigned with processor
   logic [DATA_WIDTH-1:0] a_input_data[ROWS_PROCESSORS-1:0][N-1:0];
   logic a_input_last[ROWS_PROCESSORS-1:0];
   generate
@@ -195,41 +195,150 @@ module controller #(
     end
   endgenerate
 
+  // Instruction Variables TODO: have to define values to instruction valids and inputs
+  logic b_input_buffer_instruction_valids[COLS_PROCESSORS-1:0];
+  logic b_input_buffer_instruction_readys[COLS_PROCESSORS-1:0];
+  logic [MEMORY_ADDRESS_BITS-1:0] b_input_buffer_address_inputs[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_COUNTER_BITS-1:0] b_input_buffer_length_inputs[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_repeats_inputs[COLS_PROCESSORS-1:0];
+  // Communicate with processor
+  logic b_input_valid[COLS_PROCESSORS-1:0];
+  logic b_input_ready[COLS_PROCESSORS-1:0]; // Value Assigned with processor
+  logic [DATA_WIDTH-1:0] b_input_data[COLS_PROCESSORS-1:0][N-1:0];
+  logic b_input_last[COLS_PROCESSORS-1:0];
+  generate
+    genvar b_input_buffer_index;
+    for (b_input_buffer_index = 0; b_input_buffer_index < COLS_PROCESSORS; b_input_buffer_index++) begin : b_input_buffers
+      memory_buffer #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .N(N),
+        .M(M),
+        .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
+        .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH)
+        // Ignoring "calculated" parameters
+      ) u_b_memory_buffer (
+        .clk(clk),
+        .reset(reset),
+
+        .instruction_valid(b_input_buffer_instruction_valids[b_input_buffer_index]),
+        .instruction_ready(b_input_buffer_instruction_readys[b_input_buffer_index]),
+        .address_input(b_input_buffer_address_inputs[b_input_buffer_index]),
+        .length_input(b_input_buffer_length_inputs[b_input_buffer_index]),
+        .repeats_input(b_input_repeats_inputs[b_input_buffer_index]),
+        
+        .memory_address(input_memory_b_read_address[b_input_buffer_index]),
+        .memory_data(input_memory_b_read_bus[b_input_buffer_index]),
+
+        .processor_input_valid(b_input_valid[b_input_buffer_index]),
+        .processor_input_ready(b_input_ready[b_input_buffer_index]),
+        .processor_input_data(b_input_data[b_input_buffer_index]),
+        .last(b_input_last[b_input_buffer_index])
+      )
+    end
+  endgenerate
+
   /*********************
    * DEFINE PROCESSORS *
    *********************/
   // TODO: find a way for memory buffers to write to ALL processors at same time.
   // TODO: option: write a processor_relay_buffer. It stores result, and inject into processor WHEN:
   // TODO:    DATA_SENT_TO_NEXT. BOTH_A_AND_B_HAVE_VALUE
+  
+  // TODO: right now we are just testing 1 unit, so just regulairly tie ready and valid for now
+  logic processor_input_ready_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  always_comb begin : input_ready_assign
+    for (int i = 0; i < ROWS_PROCESSORS; i++) begin
+      a_input_ready[i] = processor_input_ready_signals[i][0];
+    end
+    for (int j = 0; j < COLS_PROCESSORS; j++) begin
+      a_input_ready[j] = processor_input_ready_signals[0][j];
+    end
+  end
+  // TODO Above code need change for larger integration^
+
+  logic processor_output_ready_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic processor_output_valid_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0] processor_output_streaming_data[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+
+  generate
+    genvar processor_i, processor_j;
+    for (processor_i = 0; processor_i < ROWS_PROCESSORS; processor_i++) begin : processor_rows
+      for (processor_j = 0; processor_j < COLS_PROCESSORS; processor_j++) begin : processor_cols
+        sum_stationary #(
+          .DATA_WIDTH(DATA_WIDTH),
+          .N(N),
+          .MULTIPLY_DATA_WIDTH(MULTIPLY_DATA_WIDTH),
+          .ACCUM_DATA_WIDTH(ACCUM_DATA_WIDTH)
+        ) u_processor (
+          .clk(clk),
+          .reset(reset),
+
+          .a_input_valid(a_input_valid[processor_i]),
+          .b_input_valid(b_input_valid[processor_j]),
+          .output_ready(processor_output_ready_signals[processor_i][processor_j]),
+          .input_ready(processor_input_ready_signals[processor_i][processor_j]),
+          .output_valid(processor_output_valid_signals[processor_i][processor_j]),
+          .output_by_row(processor_output_by_row[processor_i][processor_j]),
+          .last(a_input_last[processor_i]), // Assuming only a will need the last signal
+          .a_data(a_input_data[processor_i]),
+          .b_data(b_input_data[processor_j]),
+          .c_data_streaming(processor_output_streaming_data[processor_i][processor_j])
+        )
+      end
+    end
+  endgenerate
 
   /*************************
    * DEFINE OUTPUT_BUFFERS *
    *************************/
   // TODO: define a grid of output buffer per processor.
-  // TODO: Add a similar type of "previous_done_writing"
+  logic output_buffer_instruction_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic output_buffer_instruction_readys[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic [MEMORY_ADDRESS_BITS-1:0] output_buffer_address_inputs[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic output_buffer_by_row_instructions[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+
+  logic output_buffer_completed_readys[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  logic output_buffer_completed_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+
+  logic processor_output_by_row[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
 
   generate
-    genvar i, j;
-    for (i = 0; i < ROWS_PROCESSORS; i++) begin : processors_row
-      for (j = 0; j < N; j++) begin : processors_col
-        sum_stationary #(
-          // .DATA_WIDTH(DATA_WIDTH),
-          // .N(N),
-          // .MULTIPLY_DATA_WIDTH(MULTIPLY_DATA_WIDTH), 
-          // .ACCUM_DATA_WIDTH(ACCUM_DATA_WIDTH) 
-        ) u_processor (
+    genvar output_buffer_i, output_buffer_j;
+    for (output_buffer_i = 0; output_buffer_i < ROWS_PROCESSORS; output_buffer_i++) begin : output_buffer_rows
+      for (output_buffer_j = 0; output_buffer_j < COLS_PROCESSORS; output_buffer_j++) begin : output_buffer_cols
+        output_memory_writer #(
+          .OUTPUT_DATA_WIDTH(MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH),
+          .N(N),
+          .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
+          .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE)
+        ) u_output_memory_writer (
           .clk(clk),
-          // .enable(enable),
-          // .reset(reset || (result_valid && !output_valid)),
-          // .west_i((j == 0) ? west_inputs[i] : horizontal_interconnect[i][j]),
-          // .north_i((i == 0) ? north_inputs[j] : vertical_interconnect[i][j]),
-          // .south_o(vertical_interconnect[i+1][j]),
-          // .east_o(horizontal_interconnect[i][j+1]),
-          // .result_o(c_data[i][j])
-        );
+          .reset(reset),
+
+          .instruction_valid(output_buffer_instruction_valids[output_buffer_i][output_buffer_j]),
+          .instruction_ready(output_buffer_instruction_readys[output_buffer_i][output_buffer_j]),
+          .address_input(output_buffer_address_inputs[output_buffer_i][output_buffer_j]),
+          .output_by_row_instruction(output_buffer_by_row_instructions[output_buffer_i][output_buffer_j]),
+
+          .completed_ready(output_buffer_completed_readys[output_buffer_i][output_buffer_j]),
+          .completed_valid(output_buffer_completed_valids[output_buffer_i][output_buffer_j]),
+
+          .write_valid(output_memory_write_valids[output_buffer_i * ROWS_PROCESSORS + output_buffer_j]),
+          .write_ready(output_memory_write_readys[output_buffer_i * ROWS_PROCESSORS + output_buffer_j]),
+          .write_address(output_memory_write_address[output_buffer_i * ROWS_PROCESSORS + output_buffer_j]),
+          .write_data(output_memory_write_bus[output_buffer_i * ROWS_PROCESSORS + output_buffer_j]),
+
+          .output_ready(processor_output_ready_signals[output_buffer_i][output_buffer_j]),
+          .output_valid(processor_output_valid_signals[output_buffer_i][output_buffer_j]),
+          .output_by_row(processor_output_by_row[output_buffer_i][output_buffer_j]),
+          .c_data_streaming(processor_output_streaming_data[output_buffer_i][output_buffer_j])
+        )
       end
     end
   endgenerate
+
+  
 
 some signals to be defined:
   a memory addr, b memory addr, c memory addr registers
