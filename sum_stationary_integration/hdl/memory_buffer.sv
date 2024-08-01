@@ -15,25 +15,25 @@ module memory_buffer #(
   parameter int MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1), // For reading from memory, we read at most MAX_MATRIX_LENGTH * N values
   parameter int REPEATS_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH/N) + 1) // keep track of how many full data repeats are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)
 ) (
-  input   logic                           clk,            // Clock signal
-  input   logic                           reset,          // To clear buffer and restore counter
+  input   logic                             clk,            // Clock signal
+  input   logic                             reset,          // To clear buffer and restore counter
 
   // Communicate with the control module delivering instructions to buffer - To be connected to controller (send instructions on rising edge where valid and ready)
-  input   logic                           instruction_valid, 
-  output  logic                           instruction_ready,
-  input   logic [MEMORY_ADDRESS_BITS-1:0] address_input, // The start address of the memory where the data will be. (data will be at addr: address_input, address_input+1, address_input+2...)
-  input   logic [COUNTER_BITS-1:0]        length_input, // How big is the input, we will send matrix multiplication of [N x length_input] * [length_input x N]
+  input   logic                             instruction_valid, 
+  output  logic                             instruction_ready,
+  input   logic [MEMORY_ADDRESS_BITS-1:0]   address_input, // The start address of the memory where the data will be. (data will be at addr: address_input, address_input+1, address_input+2...)
+  input   logic [COUNTER_BITS-1:0]          length_input, // How big is the input, we will send matrix multiplication of [N x length_input] * [length_input x N]
   input   logic [REPEATS_COUNTER_BITS-1:0]  repeats_input, // How many times the full buffer will be sent to processor before accepting new instructions. (for data reuse)
 
   // Communicating with memory to read data (TODO: assuming memory read have no delay)
-  output  logic [MEMORY_ADDRESS_BITS-1:0] memory_address, // address we are telling the memory we are reading from
-  input   logic [DATA_WIDTH-1:0]          memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
+  output  logic [MEMORY_ADDRESS_BITS-1:0]   memory_address, // address we are telling the memory we are reading from
+  input   logic [DATA_WIDTH-1:0]            memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
 
   // Communicating with the processor
-  output  logic                           processor_input_valid, // valid for processor input
-  input   logic                           processor_input_ready, // ready for processor input
-  output  logic [DATA_WIDTH-1:0]          processor_input_data[N-1:0], // the N len vector of row/col to be sent
-  output  logic                           last // The signal sent alongside the last value in the operation to tell the module to "wrap up" computation
+  output  logic                             processor_input_valid, // valid for processor input
+  input   logic                             processor_input_ready, // ready for processor input
+  output  logic [DATA_WIDTH-1:0]            processor_input_data[N-1:0], // the N len vector of row/col to be sent
+  output  logic                             last // The signal sent alongside the last value in the operation to tell the module to "wrap up" computation
 );
   /************************
    * Read from controller *
