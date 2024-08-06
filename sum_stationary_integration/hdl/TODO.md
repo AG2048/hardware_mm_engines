@@ -50,3 +50,32 @@ Controller: - split controller and top_level (now they are basically a same thin
 - processor - by itself -> NoC <- buffers
 - Controller - be its own block (may have signals that's not on NoC, since it's mostly 1bit wide)
 NoC is good for LARGE data sets. not for 1 bit
+
+
+## New parameters to deal with:
+### Processor:
+```
+parameter int PROCESSOR_ROWS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
+parameter int PROCESSOR_COLS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
+parameter int ROW_ID = 0,
+parameter int COL_ID = 0,
+```
+```
+input   logic [PROCESSOR_COLS_BITS]                             input_col_id,   // Col destination of the A input
+input   logic [PROCESSOR_ROWS_BITS]                             input_row_id,   // Row destination of the B input
+```
+where we replaced all a_input_valid with a_input_valid && col_id == COL_ID
+### Input Buffer
+```
+parameter int NUM_PROCESSORS_TO_BROADCAST = 4, // Assuming 4 processors in the same row / col. (with ID: 0, 1, 2, 3...)
+parameter int PROCESSORS_ID_COUNTER_BITS = 4, // Number of bits to record what ID to broadcast to
+```
+```
+input   logic                                   processor_input_ready[NUM_PROCESSORS_TO_BROADCAST], // ready for processor input, each processor has unique ready signal
+output  logic [PROCESSORS_ID_COUNTER_BITS-1:0]  processor_input_id, // ID to write to
+```
+
+### Controller
+```
+parameter int INPUT_BUFFER_INSTRUCTION_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH*MAX_MATRIX_LENGTH/ROWS_PROCESSORS/COLS_PROCESSORS/N/N + 1), // TODO: bits required to count number of instructions already sent to each input buffer (max_matrix_len^2 / (row_processors*col processors*N^2))
+```
