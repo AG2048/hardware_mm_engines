@@ -3,6 +3,10 @@ module sum_stationary #(
   parameter int N = 4,            // Computing NxN matrix multiplications
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change TODO: should be clog(MAX_MATRIX_LEN+1)
+  parameter int PROCESSOR_ROWS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
+  parameter int PROCESSOR_COLS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
+  parameter int ROW_ID = 0,
+  parameter int COL_ID = 0,
   parameter int COUNTER_BITS = $clog2(2 * N + 1) // We count from 2N to 0
 ) (
   input   logic                                                   clk,            // Clock signal
@@ -11,6 +15,10 @@ module sum_stationary #(
   input   logic                                                   b_input_valid,  // External input to module is correct/valid
   input   logic                                                   output_ready,   // External device is ready to receive output
   output  logic                                                   input_ready,    // Device ready to receive input
+
+  input   logic [PROCESSOR_COLS_BITS]                             input_col_id,   // Col destination of the A input
+  input   logic [PROCESSOR_ROWS_BITS]                             input_row_id,   // Row destination of the B input
+
   output  logic                                                   output_valid,   // Output is valid when all data is passed through
   input   logic                                                   output_by_row,  // Indicate if output should be done row wise or col wise
   input   logic                                                   last,           // Signal to indicate this input is the last one (only high with last data)
@@ -32,7 +40,7 @@ module sum_stationary #(
     end else if (input_done) begin
       // Input is done, just decrease count and that's it
       counter <= counter - 1;
-    end else if (last && input_ready && a_input_valid && b_input_valid) begin  
+    end else if (last && input_ready && a_input_valid && (input_col_id == COL_ID) && b_input_valid && (input_row_id == ROW_ID)) begin  
       // Last input is imposed, we begin countdown. Only count down after we sure data is in
       counter <= counter - 1;
       input_done <= 1;
@@ -40,11 +48,11 @@ module sum_stationary #(
   end
 
   // Define enable signal -- shift data in registers and inside the systolic array
-  assign enable = ((a_input_valid && b_input_valid && input_ready) || input_done) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
+  assign enable = ((a_input_valid && (input_col_id == COL_ID) && b_input_valid && (input_row_id == ROW_ID) && input_ready) || input_done) && !result_valid;  // Process data when data being input, OR all data is now in registers. Never when output_valid
   // I know this is a little repetitive, but this extra input_ready makes it clear
 
   // Define input ready -- we read input when input is not already done
-  assign input_ready = (!input_done) && (a_input_valid && b_input_valid); // Adding both input valid to ensure not one device ends input early  
+  assign input_ready = (!input_done) && (a_input_valid && (input_col_id == COL_ID) && b_input_valid && (input_row_id == ROW_ID)); // Adding both input valid to ensure not one device ends input early  
 
   // Define input data to the unit matrix
   logic [DATA_WIDTH-1:0] north_inputs [N-1:0];  // North Inputs have N inputs (B's row)
@@ -55,7 +63,7 @@ module sum_stationary #(
   ) west_delay_register (
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .read_input(a_input_valid && input_ready),  // Must consider ready as well (data can be valid in between runs)
+    .read_input(a_input_valid && (input_col_id == COL_ID) && input_ready),  // Must consider ready as well (data can be valid in between runs)
     .enable(enable),
     .data_i(a_data[N-1:0]),
     .data_o(west_inputs[N-1:0])
@@ -66,7 +74,7 @@ module sum_stationary #(
   ) north_delay_register(
     .clk(clk),
     .reset(reset || (result_valid && !output_valid)),
-    .read_input(b_input_valid && input_ready),
+    .read_input(b_input_valid && (input_row_id == ROW_ID) && input_ready),
     .enable(enable),
     .data_i(b_data[N-1:0]),
     .data_o(north_inputs[N-1:0])
