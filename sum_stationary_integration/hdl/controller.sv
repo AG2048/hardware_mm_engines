@@ -68,7 +68,7 @@ module controller #(
   input   logic                                         b_input_buffer_instruction_readys[COLS_PROCESSORS-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0]               b_input_buffer_address_inputs[COLS_PROCESSORS-1:0],
   output  logic [INPUT_BUFFER_COUNTER_BITS-1:0]         b_input_buffer_length_inputs[COLS_PROCESSORS-1:0],
-  output  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_buffer)repeats_inputs[COLS_PROCESSORS-1:0],
+  output  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_buffer_repeats_inputs[COLS_PROCESSORS-1:0],
 
   // Instruction to Output Buffer
   output  logic                                         output_buffer_instruction_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0],
