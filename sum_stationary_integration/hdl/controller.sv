@@ -139,10 +139,13 @@ module controller #(
   logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_buffer_repeats_registers[ROWS_PROCESSORS-1:0];
 
   logic [INPUT_BUFFER_INSTRUCTION_COUNTER_BITS-1:0] a_input_buffer_instruction_counters[ROWS_PROCESSORS-1:0];
+  logic a_input_buffer_started[ROWS_PROCESSORS-1:0];
 
   // valid when we in operation, AND count is not 0
   always_comb begin : a_input_buffer_instr_valid_logic
     for (int a_input_buffer_instr_valid_logic_index = 0; a_input_buffer_instr_valid_logic_index < ROWS_PROCESSORS; a_input_buffer_instr_valid_logic_index++) begin
+      // valid when: we are operating, and we have not used up all operations 
+      // When count reaches 0, it will never be valid again, until "done" flag
       a_input_buffer_instruction_valids[a_input_buffer_instr_valid_logic_index] = in_operation_register && a_input_buffer_instruction_counters[a_input_buffer_instr_valid_logic_index] != 0;
     end
   end
@@ -155,13 +158,33 @@ module controller #(
         a_input_buffer_repeats_registers[a_input_buffer_index] <= 0;
 
         a_input_buffer_instruction_counters[a_input_buffer_index] <= 0;
+        a_input_buffer_started[a_input_buffer_index] <= 0;
       end else begin
         if (in_operation_register) begin
-          if (a_input_buffer_instruction_counters[a_input_buffer_index] == 0) begin
-            // Operating but have not 
+          if (a_input_buffer_instruction_counters[a_input_buffer_index] == 0 && a_input_buffer_started[a_input_buffer_index] == 0) begin
+            // Operating but have not started sending instructions
+            // Mark as started, set data to desired values
+            a_input_buffer_instruction_counters[a_input_buffer_index] <= ;
+            a_input_buffer_started[a_input_buffer_index] <= 1;
+
+            a_input_buffer_address_registers[a_input_buffer_index] <= ;
+            a_input_buffer_length_registers[a_input_buffer_index] <= ;
+            a_input_buffer_repeats_registers[a_input_buffer_index] <= ;
           end else begin
-            // TODO: consider using done register as some sort of reset logic??? here???
+            // if ready/valid, decrease counter. 
+            // No need to care for counter here, because if counter is at the "end value", it won't be valid
+            if (a_input_buffer_instruction_valids[a_input_buffer_index] && a_input_buffer_instruction_readys[a_input_buffer_index]) begin
+              a_input_buffer_instruction_counters[a_input_buffer_index] <= a_input_buffer_instruction_counters[a_input_buffer_index] - 1;
+
+              a_input_buffer_address_registers[a_input_buffer_index] <= ;
+              a_input_buffer_length_registers[a_input_buffer_index] <= ;
+              a_input_buffer_repeats_registers[a_input_buffer_index] <= ;
+            end
           end
+        end else begin
+          // The entire computation is done, at this point counter should be 0 already
+          // We should reset the "started" signal
+          a_input_buffer_started[a_input_buffer_index] <= 0;
         end
       end
     end
