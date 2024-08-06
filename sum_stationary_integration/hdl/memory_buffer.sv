@@ -49,7 +49,7 @@ module memory_buffer #(
   logic [REPEATS_COUNTER_BITS-1:0] repeats_counter; // to count how many times the full data is sent (used to set ready signals with controller)
   
   // This is true when the immediate next clock edge we FINISH writing the last value of THIS REPEAT
-  logic writing_last_value_to_processor = last && processor_input_valid && processor_input_ready; 
+  logic writing_last_value_to_processor = last && processor_input_valid && processor_input_ready[NUM_PROCESSORS_TO_BROADCAST-1] && processor_input_id == NUM_PROCESSORS_TO_BROADCAST-1; 
   
   // Always FF Block
   always_ff @(posedge clk) begin : read_from_controller
@@ -115,7 +115,7 @@ module memory_buffer #(
     if (reset) begin
       processor_writing_counter <= 0;
       processor_id_counter <= 0; // Default write to id 0
-    end else if (processor_input_ready && processor_input_valid[processor_id_counter]) begin
+    end else if (processor_input_ready[processor_id_counter] && processor_input_valid) begin
       if (processor_id_counter == NUM_PROCESSORS_TO_BROADCAST-1) begin
         // This is the last processor to broadcast to
         processor_id_counter <= 0;
