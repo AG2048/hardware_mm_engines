@@ -1,4 +1,4 @@
-module sum_stationary #(
+module processor #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
   parameter int N = 4,            // Computing NxN matrix multiplications
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations

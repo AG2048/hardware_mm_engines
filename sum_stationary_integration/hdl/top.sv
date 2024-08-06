@@ -265,7 +265,7 @@ module controller #(
     genvar processor_i, processor_j;
     for (processor_i = 0; processor_i < ROWS_PROCESSORS; processor_i++) begin : processor_rows
       for (processor_j = 0; processor_j < COLS_PROCESSORS; processor_j++) begin : processor_cols
-        sum_stationary #(
+        processor #(
           .DATA_WIDTH(DATA_WIDTH),
           .N(N),
           .MULTIPLY_DATA_WIDTH(MULTIPLY_DATA_WIDTH),

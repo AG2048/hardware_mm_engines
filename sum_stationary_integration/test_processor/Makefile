@@ -13,19 +13,19 @@ MULTIPLY_DATA_WIDTH ?= 16
 ACCUM_DATA_WIDTH ?= 3
 
 
-VERILOG_SOURCES = $(PWD)/../hdl/sum_stationary.sv
+VERILOG_SOURCES = $(PWD)/../hdl/processor.sv
 
 # Set module parameters
 ifeq ($(SIM),icarus)
-		COMPILE_ARGS += -Psum_stationary.DATA_WIDTH=$(DATA_WIDTH) -Psum_stationary.N=$(N) -Psum_stationary.MULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -Psum_stationary.ACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
+		COMPILE_ARGS += -Pprocessor.DATA_WIDTH=$(DATA_WIDTH) -Pprocessor.N=$(N) -Pprocessor.MULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -Pprocessor.ACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
 else ifneq ($(filter $(SIM),questa modelsim riviera activehdl),)
 		SIM_ARGS += -gDATA_WIDTH=$(DATA_WIDTH) -gN=$(N) -gMULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -gACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
 else ifeq ($(SIM),vcs)
-		COMPILE_ARGS += -pvalue+sum_stationary/DATA_WIDTH=$(DATA_WIDTH) -pvalue+sum_stationary/N=$(N) -pvalue+sum_stationary/MULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -pvalue+sum_stationary/ACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
+		COMPILE_ARGS += -pvalue+processor/DATA_WIDTH=$(DATA_WIDTH) -pvalue+processor/N=$(N) -pvalue+processor/MULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -pvalue+processor/ACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
 else ifeq ($(SIM),verilator)
 		COMPILE_ARGS += -GDATA_WIDTH=$(DATA_WIDTH) -GN=$(N) -GMULTIPLY_DATA_WIDTH=$(MULTIPLY_DATA_WIDTH) -GACCUM_DATA_WIDTH=$(ACCUM_DATA_WIDTH)
 else ifneq ($(filter $(SIM),ius xcelium),)
-		EXTRA_ARGS += -defparam "sum_stationary.DATA_WIDTH=$(DATA_WIDTH)" -defparam "sum_stationary.A_ROWS=$(A_ROWS)" -defparam "sum_stationary.B_COLUMNS=$(B_COLUMNS)" -defparam "sum_stationary.A_COLUMNS_B_ROWS=$(A_COLUMNS_B_ROWS)"
+		EXTRA_ARGS += -defparam "processor.DATA_WIDTH=$(DATA_WIDTH)" -defparam "processor.A_ROWS=$(A_ROWS)" -defparam "processor.B_COLUMNS=$(B_COLUMNS)" -defparam "processor.A_COLUMNS_B_ROWS=$(A_COLUMNS_B_ROWS)"
 endif
 
 ifneq ($(filter $(SIM),riviera activehdl),)
@@ -36,8 +36,8 @@ endif
 # Fix the seed to ensure deterministic tests
 export RANDOM_SEED := 123456789
 
-TOPLEVEL    := sum_stationary
-MODULE      := sum_stationary_tb
+TOPLEVEL    := processor
+MODULE      := processor_tb
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
