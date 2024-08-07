@@ -40,6 +40,7 @@ module controller #(
   parameter int INPUT_BUFFER_MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1) // For reading from memory, we read at most MAX_MATRIX_LENGTH * N values
   parameter int INPUT_BUFFER_REPEATS_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH/N) + 1), // keep track of how many full data repeats are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)
   parameter int INPUT_BUFFER_INSTRUCTION_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH*MAX_MATRIX_LENGTH/ROWS_PROCESSORS/COLS_PROCESSORS/N/N + 1), // TODO: bits required to count number of instructions already sent to each input buffer (max_matrix_len^2 / (row_processors*col processors*N^2))
+  // TODO: ^ the above instruction counter bits used division. Not sure if integer division will negatively affect the result. 
 
   parameter int MEMORY_ADDRESS_BITS = 64,  // Used to communicate with the memory
   parameter int MEMORY_SIZE = 1024, // size of memory
@@ -134,14 +135,18 @@ module controller #(
         if ready && valid, decrease counter and set value to new
         but if: ready && valid && counter==1 (on our last value): 
   */
+
+  // Define registers to store instructions "to be sent"
   logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_address_registers[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_COUNTER_BITS-1:0] a_input_buffer_length_registers[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_buffer_repeats_registers[ROWS_PROCESSORS-1:0];
 
+  // Define state variable registers that remmebers what state the instructions are in
+  // (Started/Not Started, on step X)
   logic [INPUT_BUFFER_INSTRUCTION_COUNTER_BITS-1:0] a_input_buffer_instruction_counters[ROWS_PROCESSORS-1:0];
   logic a_input_buffer_started[ROWS_PROCESSORS-1:0];
 
-  // valid when we in operation, AND count is not 0
+  // Define the instruction valid to be: when we in operation, AND count is not 0 (count==0 indicates finished all instructions)
   always_comb begin : a_input_buffer_instr_valid_logic
     for (int a_input_buffer_instr_valid_logic_index = 0; a_input_buffer_instr_valid_logic_index < ROWS_PROCESSORS; a_input_buffer_instr_valid_logic_index++) begin
       // valid when: we are operating, and we have not used up all operations 
@@ -194,13 +199,8 @@ module controller #(
    * DEFINE OUTPUT_BUFFERS *
    *************************/
 
-  /* TODO:
-    instruction valid should be "in-progress"
-    address / by row inputs should be defined at same time (probably in an always_ff block at same time as valid)
-    ^ should be register
+  // TODO: output buffer should have same code structure as input buffer. But have a separate FF block that records the "done" signals and count them. 
 
-
-  */
 
   /* TODO:
     ready should be "in-progress" - AND count not at max?
