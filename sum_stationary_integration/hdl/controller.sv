@@ -38,8 +38,9 @@ module controller #(
   // Calculated parameters for input buffers
   parameter int INPUT_BUFFER_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH + 1) // We need to keep track of a count from 0 to MAX_MATRIX_LENGTH
   parameter int INPUT_BUFFER_MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1) // For reading from memory, we read at most MAX_MATRIX_LENGTH * N values
-  parameter int INPUT_BUFFER_REPEATS_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH/N) + 1), // keep track of how many full data repeats are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)
-  parameter int INPUT_BUFFER_INSTRUCTION_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH*MAX_MATRIX_LENGTH/ROWS_PROCESSORS/COLS_PROCESSORS/N/N + 1), // TODO: bits required to count number of instructions already sent to each input buffer (max_matrix_len^2 / (row_processors*col processors*N^2))
+  // TODO: this division can be a even smaller value
+  parameter int INPUT_BUFFER_REPEATS_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH / N) + 1), // keep track of how many full data repeats are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)
+  parameter int INPUT_BUFFER_INSTRUCTION_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH*MAX_MATRIX_LENGTH / ROWS_PROCESSORS/COLS_PROCESSORS / N / N + 1), // TODO: bits required to count number of instructions already sent to each input buffer (max_matrix_len^2 / (row_processors*col processors*N^2))
   // TODO: ^ the above instruction counter bits used division. Not sure if integer division will negatively affect the result. 
 
   parameter int MEMORY_ADDRESS_BITS = 64,  // Used to communicate with the memory
@@ -155,6 +156,9 @@ module controller #(
     end
   end
 
+  // Define a separate counter for input (it keeps track of which repeat we are at)
+  logic [INPUT_BUFFER_INSTRUCTION_COUNTER_BITS-1:0] a_input_buffer_repeat_counters[ROWS_PROCESSORS-1:0];
+
   always_ff @(posedge clk) begin
     for (int a_input_buffer_index = 0; a_input_buffer_index < ROWS_PROCESSORS; a_input_buffer_index++) begin
       if (reset) begin
@@ -163,33 +167,114 @@ module controller #(
         a_input_buffer_repeats_registers[a_input_buffer_index] <= 0;
 
         a_input_buffer_instruction_counters[a_input_buffer_index] <= 0;
+        a_input_buffer_repeat_counters[a_input_buffer_index] <= 0;
         a_input_buffer_started[a_input_buffer_index] <= 0;
       end else begin
         if (in_operation_register) begin
           if (a_input_buffer_instruction_counters[a_input_buffer_index] == 0 && a_input_buffer_started[a_input_buffer_index] == 0) begin
             // Operating but have not started sending instructions
             // Mark as started, set data to desired values
-            a_input_buffer_instruction_counters[a_input_buffer_index] <= ;
+            a_input_buffer_instruction_counters[a_input_buffer_index] <= matrix_length_register / ROWS_PROCESSORS / N; // Value set to Num Instruction
             a_input_buffer_started[a_input_buffer_index] <= 1;
 
-            a_input_buffer_address_registers[a_input_buffer_index] <= ;
-            a_input_buffer_length_registers[a_input_buffer_index] <= ;
-            a_input_buffer_repeats_registers[a_input_buffer_index] <= ;
+            // TODO: i'm sure some computations here can be done better
+            a_input_buffer_address_registers[a_input_buffer_index] <= a_addr_register + (a_input_buffer_repeat_counters[a_input_buffer_index] * N*matrix_len*ROWS_PROCESSORS) + (a_input_buffer_index * N*matrix_length_register);
+            a_input_buffer_length_registers[a_input_buffer_index] <= matrix_length_register;
+            a_input_buffer_repeats_registers[a_input_buffer_index] <= matrix_length_register / COLS_PROCESSORS / N; // TODO: division? TODO: or this could be user input?
           end else begin
             // if ready/valid, decrease counter. 
             // No need to care for counter here, because if counter is at the "end value", it won't be valid
             if (a_input_buffer_instruction_valids[a_input_buffer_index] && a_input_buffer_instruction_readys[a_input_buffer_index]) begin
+              if (a_input_buffer_repeat_counters[a_input_buffer_index] == matrix_length_register / ROWS_PROCESSORS / N - 1) begin
+                // Although this won't occur for A inputs
+                a_input_buffer_repeat_counters[a_input_buffer_index] <= 0;
+              end else begin
+                a_input_buffer_repeat_counters[a_input_buffer_index] <= a_input_buffer_repeat_counters[a_input_buffer_index] + 1;
+              end
+              
               a_input_buffer_instruction_counters[a_input_buffer_index] <= a_input_buffer_instruction_counters[a_input_buffer_index] - 1;
 
-              a_input_buffer_address_registers[a_input_buffer_index] <= ;
-              a_input_buffer_length_registers[a_input_buffer_index] <= ;
-              a_input_buffer_repeats_registers[a_input_buffer_index] <= ;
+              a_input_buffer_address_registers[a_input_buffer_index] <= a_addr_register + (a_input_buffer_repeat_counters[a_input_buffer_index] * N*matrix_len*ROWS_PROCESSORS) + (a_input_buffer_index * N*matrix_length_register);
+              a_input_buffer_length_registers[a_input_buffer_index] <= matrix_length_register;
+              a_input_buffer_repeats_registers[a_input_buffer_index] <= matrix_length_register / COLS_PROCESSORS / N; // TODO: division? TODO: or this could be user input?
             end
           end
         end else begin
           // The entire computation is done, at this point counter should be 0 already
           // We should reset the "started" signal
           a_input_buffer_started[a_input_buffer_index] <= 0;
+        end
+      end
+    end
+  end
+
+  // B input:
+  // Define registers to store instructions "to be sent"
+  logic [MEMORY_ADDRESS_BITS-1:0] b_input_buffer_address_registers[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_COUNTER_BITS-1:0] b_input_buffer_length_registers[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_buffer_repeats_registers[COLS_PROCESSORS-1:0];
+
+  // Define state variable registers that remmebers what state the instructions are in
+  // (Started/Not Started, on step X)
+  logic [INPUT_BUFFER_INSTRUCTION_COUNTER_BITS-1:0] b_input_buffer_instruction_counters[COLS_PROCESSORS-1:0];
+  logic b_input_buffer_started[COLS_PROCESSORS-1:0];
+
+  // Define the instruction valid to be: when we in operation, AND count is not 0 (count==0 indicates finished all instructions)
+  always_comb begin : b_input_buffer_instr_valid_logic
+    for (int b_input_buffer_instr_valid_logic_index = 0; b_input_buffer_instr_valid_logic_index < COLS_PROCESSORS; b_input_buffer_instr_valid_logic_index++) begin
+      // valid when: we are operating, and we have not used up all operations 
+      // When count reaches 0, it will never be valid again, until "done" flag
+      b_input_buffer_instruction_valids[b_input_buffer_instr_valid_logic_index] = in_operation_register && b_input_buffer_instruction_counters[b_input_buffer_instr_valid_logic_index] != 0;
+    end
+  end
+
+  // Define a separate counter for input (it keeps track of which repeat we are at)
+  logic [INPUT_BUFFER_INSTRUCTION_COUNTER_BITS-1:0] b_input_buffer_repeat_counters[COLS_PROCESSORS-1:0];
+
+  always_ff @(posedge clk) begin
+    for (int b_input_buffer_index = 0; b_input_buffer_index < COLS_PROCESSORS; b_input_buffer_index++) begin
+      if (reset) begin
+        b_input_buffer_address_registers[b_input_buffer_index] <= 0;
+        b_input_buffer_length_registers[b_input_buffer_index] <= 0;
+        b_input_buffer_repeats_registers[b_input_buffer_index] <= 0;
+
+        b_input_buffer_instruction_counters[b_input_buffer_index] <= 0;
+        b_input_buffer_repeat_counters[b_input_buffer_index] <= 0;
+        b_input_buffer_started[b_input_buffer_index] <= 0;
+      end else begin
+        if (in_operation_register) begin
+          if (b_input_buffer_instruction_counters[b_input_buffer_index] == 0 && b_input_buffer_started[b_input_buffer_index] == 0) begin
+            // Operating but have not started sending instructions
+            // Mark as started, set data to desired values
+            b_input_buffer_instruction_counters[b_input_buffer_index] <= matrix_length_register / COLS_PROCESSORS / N; // Value set to Num Instruction
+            b_input_buffer_started[b_input_buffer_index] <= 1;
+
+            // TODO: i'm sure some computations here can be done better
+            b_input_buffer_address_registers[b_input_buffer_index] <= b_addr_register + (b_input_buffer_repeat_counters[b_input_buffer_index] * N*matrix_len*COLS_PROCESSORS) + (b_input_buffer_index * N*matrix_length_register);
+            b_input_buffer_length_registers[b_input_buffer_index] <= matrix_length_register;
+            b_input_buffer_repeats_registers[b_input_buffer_index] <= matrix_length_register / ROWS_PROCESSORS / N; // TODO: division? TODO: or this could be user input?
+          end else begin
+            // if ready/valid, decrease counter. 
+            // No need to care for counter here, because if counter is at the "end value", it won't be valid
+            if (b_input_buffer_instruction_valids[b_input_buffer_index] && b_input_buffer_instruction_readys[b_input_buffer_index]) begin
+              if (b_input_buffer_repeat_counters[b_input_buffer_index] == matrix_length_register / COLS_PROCESSORS / N - 1) begin
+                // Although this won't occur for A inputs, it will for b
+                b_input_buffer_repeat_counters[b_input_buffer_index] <= 0;
+              end else begin
+                b_input_buffer_repeat_counters[b_input_buffer_index] <= b_input_buffer_repeat_counters[b_input_buffer_index] + 1;
+              end
+              
+              b_input_buffer_instruction_counters[b_input_buffer_index] <= b_input_buffer_instruction_counters[b_input_buffer_index] - 1;
+
+              b_input_buffer_address_registers[b_input_buffer_index] <= a_addr_register + (b_input_buffer_repeat_counters[b_input_buffer_index] * N*matrix_len*COLS_PROCESSORS) + (b_input_buffer_index * N*matrix_length_register);
+              b_input_buffer_length_registers[b_input_buffer_index] <= matrix_length_register;
+              b_input_buffer_repeats_registers[b_input_buffer_index] <= matrix_length_register / COLS_PROCESSORS / N; // TODO: division? TODO: or this could be user input?
+            end
+          end
+        end else begin
+          // The entire computation is done, at this point counter should be 0 already
+          // We should reset the "started" signal
+          b_input_buffer_started[b_input_buffer_index] <= 0;
         end
       end
     end
