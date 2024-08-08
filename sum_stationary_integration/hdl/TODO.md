@@ -79,7 +79,12 @@ output  logic [PROCESSORS_ID_COUNTER_BITS-1:0]  processor_input_id, // ID to wri
 ```
 parameter int INPUT_BUFFER_INSTRUCTION_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH*MAX_MATRIX_LENGTH/ROWS_PROCESSORS/COLS_PROCESSORS/N/N + 1), // TODO: bits required to count number of instructions already sent to each input buffer (max_matrix_len^2 / (row_processors*col processors*N^2))
 ```
+Now I have some concern regarding the program using division as an operator. An option is to have the user input the division value since it's a constant -- make it a part of input. Or hook up a separate division operator to compute these values before the program "officially" starts running. 
 
 ## Assumptions of input:
 - They are integer multiples of N * numRows or N * numCols
   - I would assume if it doesn't completely match, some additional instructions should be given to make it output 0's
+- Assuming the values stored in the memory is already configured to the "correct shape"
+  - By this i mean:
+    - for A: first row tile last col -> first row tile 2nd last col -> ... first row tile first col -> second row tile last col...
+    - for B: first col tile last row... first col tile first row...
