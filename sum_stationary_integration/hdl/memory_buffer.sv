@@ -35,7 +35,7 @@ module memory_buffer #(
 
   // Communicating with the processor
   output  logic                                   processor_input_valid, // valid for processor input
-  input   logic                                   processor_input_ready[NUM_PROCESSORS_TO_BROADCAST], // ready for processor input, each processor has unique ready signal
+  input   logic                                   processor_input_ready[NUM_PROCESSORS_TO_BROADCAST-1:0], // ready for processor input, each processor has unique ready signal
   output  logic [PROCESSORS_ID_COUNTER_BITS-1:0]  processor_input_id, // ID to write to
   output  logic [DATA_WIDTH-1:0]                  processor_input_data[N-1:0], // the N len vector of row/col to be sent
   output  logic                                   last // The signal sent alongside the last value in the operation to tell the module to "wrap up" computation
