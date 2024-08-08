@@ -76,72 +76,25 @@ module controller #(
   // TODO, temp using many memory bus for module I/O
   input   logic [DATA_WIDTH-1:0]          input_memory_a_read_bus[ROWS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
   input   logic [DATA_WIDTH-1:0]          input_memory_b_read_bus[COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
-  input   logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_read_bus[ROWS_PROCESSORS*COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  input   logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_read_bus[NUM_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_a_read_address[ROWS_PROCESSORS-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_b_read_address[COLS_PROCESSORS-1:0],
-  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_read_address[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_read_address[NUM_PROCESSORS-1:0],
 
   output  logic  input_memory_a_write_valids[ROWS_PROCESSORS-1:0],
   output  logic  input_memory_b_write_valids[COLS_PROCESSORS-1:0],
   input   logic  input_memory_a_write_readys[ROWS_PROCESSORS-1:0],
   input   logic  input_memory_b_write_readys[COLS_PROCESSORS-1:0],
-  output  logic  output_memory_write_valids[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
-  input   logic  output_memory_write_readys[ROWS_PROCESSORS*COLS_PROCESSORS-1:0],
+  output  logic  output_memory_write_valids[NUM_PROCESSORS-1:0],
+  input   logic  output_memory_write_readys[NUM_PROCESSORS-1:0],
 
   output  logic [DATA_WIDTH-1:0]          input_memory_a_write_bus[ROWS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
   output  logic [DATA_WIDTH-1:0]          input_memory_b_write_bus[COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
-  output  logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_write_bus[ROWS_PROCESSORS*COLS_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
+  output  logic [MULTIPLY_DATA_WIDTH+ACCUM_DATA_WIDTH-1:0] output_memory_write_bus[NUM_PROCESSORS-1:0][PARALLEL_DATA_STREAMING_SIZE-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_a_write_address[ROWS_PROCESSORS-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_b_write_address[COLS_PROCESSORS-1:0],
-  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_write_address[ROWS_PROCESSORS*COLS_PROCESSORS-1:0]
+  output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_write_address[NUM_PROCESSORS-1:0]
 );
-  /************************
-   * GENERAL INSTRUCTIONS *
-   ************************/
-  logic done_register, in_operation_register, a_addr_register, b_addr_register, c_addr_register, matrix_length_register;
-  always_ff @(posedge clk) begin
-    if (reset) begin
-      in_operation_register <= '0;
-      done_register <= '0;
-    end else begin
-      if (instruction_ready && instruction_valid) begin
-        // Read in new instruction, set in_ops to true
-        in_operation_register <= '1;
-        a_addr_register <= a_memory_addr;
-        b_addr_register <= b_memory_addr;
-        c_addr_register <= c_memory_addr;
-        matrix_length_register <= matrix_length_input;
-        done_register <= '0;
-      end else if (...) begin // TODO: define the logic condition for this
-        // If all output buffer have completed their last output task:
-        in_operation_register <= '0;
-        done_register <= '1;
-      end
-    end
-  end
-  assign instruction_ready = ~in_operation_register;
-  assign done = done_register;
-
-  /*
-  Blocks:
-
-  Memory -- TODO: this is temporary to add memory as a submodule
-    Define 3 memory modules. Define a wire for each I/O
-  Input Buffer
-    Define ROWS_PROCESSORS of A_input
-    Define COLS_PROCESSORS of B_input
-    Currently, define the "ready valid signal to that of 1 unit" TODO: later expand to multiple units on same row/col
-    Define output to processor. 
-
-    Need to define an internal counter / logic that tells each buffer which address to read from. 
-  Processors
-    Define processors. 
-    TODO: right now we just AND together all the input ready signals. 
-    connect input from buffer, output to output buffers
-  Output Buffer
-    Define output buffers, connect to memory
-  */
-
   /***********************
    * DEFINE INPUT BUFFER *
    ***********************/
@@ -150,18 +103,78 @@ module controller #(
   logic a_input_buffer_instruction_readys[ROWS_PROCESSORS-1:0];
   logic [MEMORY_ADDRESS_BITS-1:0] a_input_buffer_address_inputs[ROWS_PROCESSORS-1:0];
   logic [INPUT_BUFFER_COUNTER_BITS-1:0] a_input_buffer_length_inputs[ROWS_PROCESSORS-1:0];
-  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_repeats_inputs[ROWS_PROCESSORS-1:0];
-  /* TODO:
-    instruction valid should be "in-progress"
-    address / length / repeats inputs should be defined at same time (probably in an always_ff block at same time as valid)
-    ^ should be register
+  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] a_input_buffer_repeats_inputs[ROWS_PROCESSORS-1:0];
+
+  logic b_input_buffer_instruction_valids[COLS_PROCESSORS-1:0];
+  logic b_input_buffer_instruction_readys[COLS_PROCESSORS-1:0];
+  logic [MEMORY_ADDRESS_BITS-1:0] b_input_buffer_address_inputs[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_COUNTER_BITS-1:0] b_input_buffer_length_inputs[COLS_PROCESSORS-1:0];
+  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_buffer_repeats_inputs[COLS_PROCESSORS-1:0];
+
+  logic output_buffer_instruction_valids[NUM_PROCESSORS-1:0];
+  logic output_buffer_instruction_readys[NUM_PROCESSORS-1:0];
+  logic [MEMORY_ADDRESS_BITS-1:0] output_buffer_address_inputs[NUM_PROCESSORS-1:0];
+  logic output_buffer_by_row_instructions[NUM_PROCESSORS-1:0];
+  logic output_buffer_completed_readys[NUM_PROCESSORS-1:0];
+  logic output_buffer_completed_valids[NUM_PROCESSORS-1:0];
+
+  controller #(
+    .DATA_WIDTH(DATA_WIDTH),
+
+    .N(N),
+    .M(M),
+    
+    .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH),
+
+    .MULTIPLY_DATA_WIDTH(MULTIPLY_DATA_WIDTH),
+    .ACCUM_DATA_WIDTH(ACCUM_DATA_WIDTH),
+
+    .ROWS_PROCESSORS(ROWS_PROCESSORS),
+    .COLS_PROCESSORS(COLS_PROCESSORS),
+
+    .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
+    .MEMORY_SIZE(MEMORY_SIZE),
+    .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE)
+  ) u_controller (
+    .clk(clk),
+    .reset(reset),
+
+    .a_memory_addr(a_memory_addr),
+    .b_memory_addr(b_memory_addr),
+    .c_memory_addr(c_memory_addr),
+    .matrix_length_input(matrix_length_input), // It's an NxN * NxN input 
+    .instruction_valid(instruction_valid), // Tell if memory addr is received or not
+    .instruction_ready(instruction_ready), // Tell if memory addr is received or not
+    .done(done),            // When the result in C is correct
+
+    // Instruction to Input Buffer
+    .a_input_buffer_instruction_valids(a_input_buffer_instruction_valids),
+    .a_input_buffer_instruction_readys(a_input_buffer_instruction_readys),
+    .a_input_buffer_address_inputs(a_input_buffer_address_inputs),
+    .a_input_buffer_length_inputs(a_input_buffer_length_inputs),
+    .a_input_buffer_repeats_inputs(a_input_buffer_repeats_inputs),
+
+    .b_input_buffer_instruction_valids(b_input_buffer_instruction_valids),
+    .b_input_buffer_instruction_readys(b_input_buffer_instruction_readys),
+    .b_input_buffer_address_inputs(b_input_buffer_address_inputs),
+    .b_input_buffer_length_inputs(b_input_buffer_length_inputs),
+    .b_input_buffer_repeats_inputs(b_input_buffer_repeats_inputs),
+
+    .output_buffer_instruction_valids(output_buffer_instruction_valids),
+    .output_buffer_instruction_readys(output_buffer_instruction_readys),
+    .output_buffer_address_inputs(output_buffer_address_inputs),
+    .output_buffer_by_row_instructions(output_buffer_by_row_instructions),
+    
+    .output_buffer_completed_readys(output_buffer_completed_readys),
+    .output_buffer_completed_valids(output_buffer_completed_valids)
+  )
 
 
-  */
   // Communicate with processor
   logic a_input_valid[ROWS_PROCESSORS-1:0];
-  logic a_input_ready[ROWS_PROCESSORS-1:0]; // Value Assigned with processor
+  logic a_input_ready[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0]; // Value Assigned with processor
   logic [DATA_WIDTH-1:0] a_input_data[ROWS_PROCESSORS-1:0][N-1:0];
+  logic [PROCESSOR_COLS_BITS-1:0] a_input_id[ROWS_PROCESSORS-1:0]; // TODO This can be a parameter...
   logic a_input_last[ROWS_PROCESSORS-1:0];
   generate
     genvar a_input_buffer_index;
@@ -172,7 +185,10 @@ module controller #(
         .M(M),
         .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
         .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH)
+        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH),
+
+        .NUM_PROCESSORS_TO_BROADCAST(COLS_PROCESSORS),
+        .PROCESSORS_ID_COUNTER_BITS(PROCESSOR_COLS_BITS)
         // Ignoring "calculated" parameters
       ) u_a_memory_buffer (
         .clk(clk),
@@ -189,33 +205,31 @@ module controller #(
 
         .processor_input_valid(a_input_valid[a_input_buffer_index]),
         .processor_input_ready(a_input_ready[a_input_buffer_index]),
+        .processor_input_id(a_input_id),
         .processor_input_data(a_input_data[a_input_buffer_index]),
         .last(a_input_last[a_input_buffer_index])
       )
     end
   endgenerate
 
-  // Instruction Variables TODO: have to define values to instruction valids and inputs
-  logic b_input_buffer_instruction_valids[COLS_PROCESSORS-1:0];
-  logic b_input_buffer_instruction_readys[COLS_PROCESSORS-1:0];
-  logic [MEMORY_ADDRESS_BITS-1:0] b_input_buffer_address_inputs[COLS_PROCESSORS-1:0];
-  logic [INPUT_BUFFER_COUNTER_BITS-1:0] b_input_buffer_length_inputs[COLS_PROCESSORS-1:0];
-  logic [INPUT_BUFFER_REPEATS_COUNTER_BITS-1:0] b_input_repeats_inputs[COLS_PROCESSORS-1:0];
-  // Communicate with processor
   logic b_input_valid[COLS_PROCESSORS-1:0];
-  logic b_input_ready[COLS_PROCESSORS-1:0]; // Value Assigned with processor
+  logic b_input_ready[COLS_PROCESSORS-1:0][ROWS_PROCESSORS-1:0]; // Value Assigned with processor
   logic [DATA_WIDTH-1:0] b_input_data[COLS_PROCESSORS-1:0][N-1:0];
+  logic [PROCESSOR_COLS_BITS-1:0] b_input_id[COLS_PROCESSORS-1:0]; // TODO This can be a parameter...
   logic b_input_last[COLS_PROCESSORS-1:0];
   generate
     genvar b_input_buffer_index;
     for (b_input_buffer_index = 0; b_input_buffer_index < COLS_PROCESSORS; b_input_buffer_index++) begin : b_input_buffers
       memory_buffer #(
-        .DATA_WIDTH(DATA_WIDTH),
+        .DATb_WIDTH(DATA_WIDTH),
         .N(N),
         .M(M),
         .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
-        .PARALLEL_DATA_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
-        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH)
+        .PARALLEL_DATb_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH),
+
+        .NUM_PROCESSORS_TO_BROADCAST(ROWS_PROCESSORS),
+        .PROCESSORS_ID_COUNTER_BITS(PROCESSOR_ROWS_BITS)
         // Ignoring "calculated" parameters
       ) u_b_memory_buffer (
         .clk(clk),
@@ -232,6 +246,52 @@ module controller #(
 
         .processor_input_valid(b_input_valid[b_input_buffer_index]),
         .processor_input_ready(b_input_ready[b_input_buffer_index]),
+        .processor_input_id(b_input_id),
+        .processor_input_data(b_input_data[b_input_buffer_index]),
+        .last(b_input_last[b_input_buffer_index])
+      )
+    end
+  endgenerate
+
+  /*****************
+   * OUTPUT BUFFER *
+   *****************/
+  // TODO
+  logic b_input_valid[COLS_PROCESSORS-1:0];
+  logic b_input_ready[COLS_PROCESSORS-1:0][ROWS_PROCESSORS-1:0]; // Value Assigned with processor
+  logic [DATA_WIDTH-1:0] b_input_data[COLS_PROCESSORS-1:0][N-1:0];
+  logic [PROCESSOR_COLS_BITS-1:0] b_input_id[COLS_PROCESSORS-1:0]; // TODO This can be a parameter...
+  logic b_input_last[COLS_PROCESSORS-1:0];
+  generate
+    genvar b_input_buffer_index;
+    for (b_input_buffer_index = 0; b_input_buffer_index < COLS_PROCESSORS; b_input_buffer_index++) begin : b_input_buffers
+      memory_buffer #(
+        .DATb_WIDTH(DATA_WIDTH),
+        .N(N),
+        .M(M),
+        .MEMORY_ADDRESS_BITS(MEMORY_ADDRESS_BITS),
+        .PARALLEL_DATb_STREAMING_SIZE(PARALLEL_DATA_STREAMING_SIZE),
+        .MAX_MATRIX_LENGTH(MAX_MATRIX_LENGTH),
+
+        .NUM_PROCESSORS_TO_BROADCAST(ROWS_PROCESSORS),
+        .PROCESSORS_ID_COUNTER_BITS(PROCESSOR_ROWS_BITS)
+        // Ignoring "calculated" parameters
+      ) u_b_memory_buffer (
+        .clk(clk),
+        .reset(reset),
+
+        .instruction_valid(b_input_buffer_instruction_valids[b_input_buffer_index]),
+        .instruction_ready(b_input_buffer_instruction_readys[b_input_buffer_index]),
+        .address_input(b_input_buffer_address_inputs[b_input_buffer_index]),
+        .length_input(b_input_buffer_length_inputs[b_input_buffer_index]),
+        .repeats_input(b_input_repeats_inputs[b_input_buffer_index]),
+        
+        .memory_address(input_memory_b_read_address[b_input_buffer_index]),
+        .memory_data(input_memory_b_read_bus[b_input_buffer_index]),
+
+        .processor_input_valid(b_input_valid[b_input_buffer_index]),
+        .processor_input_ready(b_input_ready[b_input_buffer_index]),
+        .processor_input_id(b_input_id),
         .processor_input_data(b_input_data[b_input_buffer_index]),
         .last(b_input_last[b_input_buffer_index])
       )
@@ -241,26 +301,6 @@ module controller #(
   /*********************
    * DEFINE PROCESSORS *
    *********************/
-  // TODO: find a way for memory buffers to write to ALL processors at same time.
-  // TODO: option: write a processor_relay_buffer. It stores result, and inject into processor WHEN:
-  // TODO:    DATA_SENT_TO_NEXT. BOTH_A_AND_B_HAVE_VALUE
-  
-  // TODO: right now we are just testing 1 unit, so just regulairly tie ready and valid for now
-  logic processor_input_ready_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  always_comb begin : input_ready_assign
-    for (int i = 0; i < ROWS_PROCESSORS; i++) begin
-      a_input_ready[i] = processor_input_ready_signals[i][0];
-    end
-    for (int j = 0; j < COLS_PROCESSORS; j++) begin
-      a_input_ready[j] = processor_input_ready_signals[0][j];
-    end
-  end
-  // TODO Above code need change for larger integration^
-
-  logic processor_output_ready_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic processor_output_valid_signals[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic [MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH - 1 : 0] processor_output_streaming_data[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-
   generate
     genvar processor_i, processor_j;
     for (processor_i = 0; processor_i < ROWS_PROCESSORS; processor_i++) begin : processor_rows
@@ -293,21 +333,7 @@ module controller #(
    * DEFINE OUTPUT_BUFFERS *
    *************************/
   // TODO: define a grid of output buffer per processor.
-  logic output_buffer_instruction_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic output_buffer_instruction_readys[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic [MEMORY_ADDRESS_BITS-1:0] output_buffer_address_inputs[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic output_buffer_by_row_instructions[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-
-  /* TODO:
-    instruction valid should be "in-progress"
-    address / by row inputs should be defined at same time (probably in an always_ff block at same time as valid)
-    ^ should be register
-
-
-  */
-
-  logic output_buffer_completed_readys[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
-  logic output_buffer_completed_valids[ROWS_PROCESSORS-1:0][COLS_PROCESSORS-1:0];
+  
 
   /* TODO:
     ready should be "in-progress" - AND count not at max?
