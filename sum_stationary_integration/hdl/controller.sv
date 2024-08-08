@@ -100,7 +100,7 @@ module controller #(
         c_addr_register <= c_memory_addr;
         matrix_length_register <= matrix_length_input;
         done_register <= '0;
-      end else if (...) begin // TODO: define the logic condition for this
+      end else if (all_done) begin // TODO: define the logic condition for this
         // If all output buffer have completed their last output task:
         in_operation_register <= '0;
         done_register <= '1;
@@ -181,6 +181,7 @@ module controller #(
             // Mark as started, set data to desired values
             a_input_buffer_instruction_counters[a_input_buffer_index] <= matrix_length_register / ROWS_PROCESSORS / N; // Value set to Num Instruction
             a_input_buffer_started[a_input_buffer_index] <= 1;
+            a_input_buffer_repeat_counters[a_input_buffer_index] <= a_input_buffer_repeat_counters[a_input_buffer_index] + 1;
 
             // TODO: i'm sure some computations here can be done better
             a_input_buffer_address_registers[a_input_buffer_index] <= a_addr_register + (a_input_buffer_repeat_counters[a_input_buffer_index] * N*matrix_len*ROWS_PROCESSORS) + (a_input_buffer_index * N*matrix_length_register);
@@ -258,6 +259,7 @@ module controller #(
             // Mark as started, set data to desired values
             b_input_buffer_instruction_counters[b_input_buffer_index] <= matrix_length_register / COLS_PROCESSORS / N; // Value set to Num Instruction
             b_input_buffer_started[b_input_buffer_index] <= 1;
+            b_input_buffer_repeat_counters[b_input_buffer_index] <= b_input_buffer_repeat_counters[b_input_buffer_index] + 1;
 
             // TODO: i'm sure some computations here can be done better
             b_input_buffer_address_registers[b_input_buffer_index] <= b_addr_register + (b_input_buffer_repeat_counters[b_input_buffer_index] * N*matrix_len*COLS_PROCESSORS) + (b_input_buffer_index * N*matrix_length_register);
@@ -346,6 +348,8 @@ module controller #(
             output_buffer_instruction_counters[output_buffer_index] <= matrix_length_register*matrix_length_register / ROWS_PROCESSORS / COLS_PROCESSORS / N / N; // Value set to Num Instruction
             output_buffer_started[output_buffer_index] <= 1;
 
+            output_buffer_repeat_counters[output_buffer_index] <= output_buffer_repeat_counters[output_buffer_index] + 1;
+
             // TODO: i'm sure some computations here can be done better
             output_buffer_address_registers[output_buffer_index] <= c_addr_register + (output_buffer_repeat_counters[output_buffer_index] * N*N*ROWS_PROCESSORS*COLS_PROCESSORS) + (output_buffer_index * N*N);
             output_buffer_length_registers[output_buffer_index] <= matrix_length_register;
@@ -354,12 +358,7 @@ module controller #(
             // if ready/valid, decrease counter. 
             // No need to care for counter here, because if counter is at the "end value", it won't be valid
             if (output_buffer_instruction_valids[output_buffer_index] && output_buffer_instruction_readys[output_buffer_index]) begin
-              if (output_buffer_repeat_counters[output_buffer_index] == matrix_length_register / COLS_PROCESSORS / N - 1) begin
-                // Although this won't occur for A inputs, it will for b
-                output_buffer_repeat_counters[output_buffer_index] <= 0;
-              end else begin
-                output_buffer_repeat_counters[output_buffer_index] <= output_buffer_repeat_counters[output_buffer_index] + 1;
-              end
+              output_buffer_repeat_counters[output_buffer_index] <= output_buffer_repeat_counters[output_buffer_index] + 1;
               
               output_buffer_instruction_counters[output_buffer_index] <= output_buffer_instruction_counters[output_buffer_index] - 1;
 
@@ -377,6 +376,38 @@ module controller #(
       end
     end
   end
+
+  /***********************
+   * OUTPUT CONFIRMATION * 
+   ***********************/
+  logic output_buffer_ended[ROWS_PROCESSORS * COLS_PROCESSORS-1:0];
+  always_ff @(posedge clk) begin
+    for (int output_buffer_index = 0; output_buffer_index < ROWS_PROCESSORS * COLS_PROCESSORS; output_buffer_index++) begin
+      if (reset) begin
+        output_buffer_ended[output_buffer_index] <= 0;
+      end else if (in_operation_register) begin
+        // This is assuming the output buffer can't finish the task in exactly 1 clock cycle
+        if (output_buffer_repeat_counters[output_buffer_index] == 0 && output_buffer_completed_readys[output_buffer_index] && output_buffer_completed_valids[output_buffer_index]) begin
+          output_buffer_ended[output_buffer_index] <= 1;
+        end
+      end else begin
+        output_buffer_ended[output_buffer_index] <= 0;
+      end
+    end
+  end
+
+  always_comb begin
+    for (int output_buffer_index = 0; output_buffer_index < ROWS_PROCESSORS * COLS_PROCESSORS; output_buffer_index++) begin
+      // receive completed when it's not already completed AND in operation. 
+      output_buffer_completed_readys[output_buffer_index] = in_operation_register && ~output_buffer_ended[output_buffer_index];
+    end
+  end
+
+  logic all_done;
+  assign all_done = &output_buffer_ended;
+  /*
+  
+  ff
 
 
 endmodule
