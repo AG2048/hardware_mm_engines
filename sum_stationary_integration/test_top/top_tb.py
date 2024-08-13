@@ -25,6 +25,73 @@ if cocotb.simulator.is_running():
     MULTIPLY_DATA_WIDTH = int(cocotb.top.MULTIPLY_DATA_WIDTH)
     ACCUM_DATA_WIDTH = int(cocotb.top.ACCUM_DATA_WIDTH)
 
+class MemoryReadController:
+    def __init__(self, dut: SimHandleBase, clk: SimHandleBase, 
+                 read_readys: SimHandleBase, read_valids: SimHandleBase, read_addresses: SimHandleBase, read_datas: SimHandleBase,
+                 num_ports: int, parallel_num_ports: int, memory_size: int):
+        # TODO: there should be a memory array here. 
+        self._dut = dut
+        self._clk = clk
+        
+        self._read_readys = read_readys
+        self._read_valids = read_valids
+        self._read_addresses = read_addresses
+        self._read_datas = read_datas
+
+        self._num_ports = num_ports
+        self._parallel_num_ports = parallel_num_ports
+
+        self._port_index = 0
+
+        # Initialize memory to all 0
+        self._memory_size = memory_size
+        self._memory = {}
+        for i in range(memory_size):
+            self._memory[i] = 0
+
+        self._coro = None
+
+    def start(self) -> None:
+        """Start monitor"""
+        if self._coro is not None:
+            raise RuntimeError("Monitor already started")
+        self._coro = cocotb.start_soon(self._run())  # Start a coroutine
+
+    def stop(self) -> None:
+        """Stop monitor"""
+        if self._coro is None:
+            raise RuntimeError("Monitor never started")
+        self._coro.kill()
+        self._coro = None
+
+    def set_memory(self, memory: Dict[int, int]):
+        """Set the memory to the array / list that will be passed in
+        
+        Shape: {0: 12, 1: 1231241241, ...}
+        """
+        self._memory = memory
+
+    def alter_memory(self, address: int, value: int):
+        self._memory[address] = value
+
+    async def _run(self) -> None:
+        """
+        After edge, check if ready at _port_index is true. If so, set data, set valid to the address, and pass through. Then increment the index
+        We assume the user when reading at index "i", it reads i, i+1, i+2, i+3... to i+Parallel_num_ports-1
+        """
+        while True:
+            await RisingEdge(self._clk)
+            if self._read_readys[self._port_index].value.binstr == "1":
+                for i in range(self._num_ports):
+                    self._read_valids[i].value = 0
+                self._read_valids[self._port_index].value = 0
+                address = self._read_addresses[self._port_index].value.integer
+                for i in range(self._parallel_num_ports):
+                    self._read_datas[self._port_index + i].value = self.memory[address + i]
+            self._port_index = (self._port_index + 1) % self._num_ports
+
+
+
 # Data reader - that asserts ready when instructed to start read data, not ready when stop. Checks for valid signals before reading.
 #   reader(ready=True/False) - and it logs whatever value it read
 class LIReader:
@@ -32,7 +99,7 @@ class LIReader:
         self.values = Queue[Dict[str, int]]()  # {'signal_name': value}, signals=dict(c_data_streaming=self.dut.c_data_streaming),
         self._dut = dut
         self._clk = clk
-        self._signals = signals
+        self._sinals = signals
         self._valid = valid
         self._ready = ready
         self._coro = None
