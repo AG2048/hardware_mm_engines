@@ -81,6 +81,13 @@ module controller #(
   output  logic [MEMORY_ADDRESS_BITS-1:0]          input_memory_b_read_address[COLS_PROCESSORS-1:0],
   output  logic [MEMORY_ADDRESS_BITS-1:0] output_memory_read_address[NUM_PROCESSORS-1:0],
 
+  input  logic  input_memory_a_read_valids[ROWS_PROCESSORS-1:0],
+  input  logic  input_memory_b_read_valids[COLS_PROCESSORS-1:0],
+  output   logic  input_memory_a_read_readys[ROWS_PROCESSORS-1:0],
+  output   logic  input_memory_b_read_readys[COLS_PROCESSORS-1:0],
+  input  logic  output_memory_read_valids[NUM_PROCESSORS-1:0],
+  output   logic  output_memory_read_readys[NUM_PROCESSORS-1:0],
+
   output  logic  input_memory_a_write_valids[ROWS_PROCESSORS-1:0],
   output  logic  input_memory_b_write_valids[COLS_PROCESSORS-1:0],
   input   logic  input_memory_a_write_readys[ROWS_PROCESSORS-1:0],
@@ -202,6 +209,8 @@ module controller #(
         
         .memory_address(input_memory_a_read_address[a_input_buffer_index]),
         .memory_data(input_memory_a_read_bus[a_input_buffer_index]),
+        .memory_read_valid(input_memory_a_read_valids[a_input_buffer_index]),
+        .memory_read_ready(input_memory_a_read_readys[a_input_buffer_index]),
 
         .processor_input_valid(a_input_valid[a_input_buffer_index]),
         .processor_input_ready(a_input_ready[a_input_buffer_index]),
@@ -243,6 +252,8 @@ module controller #(
         
         .memory_address(input_memory_b_read_address[b_input_buffer_index]),
         .memory_data(input_memory_b_read_bus[b_input_buffer_index]),
+        .memory_read_valid(input_memory_b_read_valids[b_input_buffer_index]),
+        .memory_read_ready(input_memory_b_read_readys[b_input_buffer_index]),
 
         .processor_input_valid(b_input_valid[b_input_buffer_index]),
         .processor_input_ready(b_input_ready[b_input_buffer_index]),
