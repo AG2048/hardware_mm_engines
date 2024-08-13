@@ -155,10 +155,6 @@ class MemoryWriteController:
 
             for i in range(self._num_ports):
                 self._write_readys[i].value = 1 if i == self._port_index else 0
-            address = self._read_addresses[self._port_index].value.integer
-            for i in range(self._parallel_num_ports):
-                self._read_datas[self._port_index + i].value = self.memory[address + i]
-            self._port_index = (self._port_index + 1) % self._num_ports
 
 
 
