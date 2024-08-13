@@ -32,6 +32,9 @@ module memory_buffer #(
   // Communicating with memory to read data (TODO: assuming memory read have no delay)
   output  logic [MEMORY_ADDRESS_BITS-1:0]         memory_address, // address we are telling the memory we are reading from
   input   logic [DATA_WIDTH-1:0]                  memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0], // the data bus of PARALLEL_DATA_STREAMING_SIZE values each of size DATA_WIDTH
+  input   logic                                   memory_read_valid,
+  output  logic                                   memory_read_ready,
+
 
   // Communicating with the processor
   output  logic                                   processor_input_valid, // valid for processor input
@@ -93,12 +96,16 @@ module memory_buffer #(
       // In operation, check if enough memory has been read. If not, read it.
       if (memory_reading_counter < length_register * N) begin
         // TODO: we are really assuming N and M are integer multiples... of PARALLEL_DATA_STREAMING_SIZE
-        memory_reading_counter <= memory_reading_counter + PARALLEL_DATA_STREAMING_SIZE; 
-        memory_buffer_registers[memory_reading_counter+PARALLEL_DATA_STREAMING_SIZE-1 : memory_reading_counter] = memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+        if (memory_read_valid && memory_read_ready) begin
+          // read ready and valid
+          memory_reading_counter <= memory_reading_counter + PARALLEL_DATA_STREAMING_SIZE; 
+          memory_buffer_registers[memory_reading_counter+PARALLEL_DATA_STREAMING_SIZE-1 : memory_reading_counter] = memory_data[PARALLEL_DATA_STREAMING_SIZE-1:0];
+        end
       end
     end
   end
   assign memory_address = address_register + memory_reading_counter;
+  assign memory_read_ready = repeats_counter != 0 && memory_reading_counter < length_register * N; // Ready to read when we are still operating, and have not fully read data yet
 
   /**********************
    * Write to processor *
