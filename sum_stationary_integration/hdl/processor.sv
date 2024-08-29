@@ -1,12 +1,14 @@
 module processor #(
   parameter int DATA_WIDTH = 8,   // Using 8-bit integers 
-  parameter int N = 4,            // Computing NxN matrix multiplications
+  parameter int B_N = 4,            // Computing NxN matrix multiplications, 1<<BITS_N
   parameter int MULTIPLY_DATA_WIDTH = 2 * DATA_WIDTH, // Data width for multiplication operations
   parameter int ACCUM_DATA_WIDTH = 16, // How many additional bits to reserve for accumulation, can change TODO: should be clog(MAX_MATRIX_LEN+1)
   parameter int PROCESSOR_ROWS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
   parameter int PROCESSOR_COLS_BITS = 4, // Giving each processor an ID, this is used to respond to input valid
   parameter int ROW_ID = 0,
   parameter int COL_ID = 0,
+  
+  parameter int N = 1 << B_N, // Computing NxN matrix multiplications
   parameter int COUNTER_BITS = $clog2(2 * N + 1) // We count from 2N to 0
 ) (
   input   logic                                                   clk,            // Clock signal

@@ -5,10 +5,17 @@
  */
 
 module output_memory_writer #(
-  parameter int OUTPUT_DATA_WIDTH = 8,           // Using 8-bit integers 
-  parameter int N = 4,                    // What's the width of the processing units
-  parameter int MEMORY_ADDRESS_BITS = 64  // Used to communicate with the memory
-  parameter int PARALLEL_DATA_STREAMING_SIZE = 4, // Memory can output 4 numbers at same time TODO: always divisor of SIZE... TODO: divides N
+  parameter int OUTPUT_DATA_WIDTH = 18,           // Using 8-bit integers 
+
+  parameter int B_N = 2,                    // What's the width of the processing units
+  parameter int N = 1 << B_N,                    // What's the width of the processing units
+
+  parameter int B_MEMORY_ADDRESS_BITS = 6  // Used to communicate with the memory 2^6
+  parameter int B_PARALLEL_DATA_STREAMING_SIZE = 2, // Memory can output 4 numbers at same time (2^2) TODO: always divisor of SIZE...
+
+  parameter int MEMORY_ADDRESS_BITS = 1 << B_MEMORY_ADDRESS_BITS  // Used to communicate with the memory
+  parameter int PARALLEL_DATA_STREAMING_SIZE = 1 << B_PARALLEL_DATA_STREAMING_SIZE, // Memory can output 4 numbers at same time TODO: always divisor of SIZE...
+  
   parameter int COUNTER_BITS = $clog2(N-1 + 1) // We count from 0 to N-1 for cycles written
   parameter int MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1) // For reading from memory, we read at most MAX_MATRIX_LENGTH * N values
 ) (

@@ -6,15 +6,26 @@
 
 module memory_buffer #(
   parameter int DATA_WIDTH = 8,           // Using 8-bit integers 
-  parameter int N = 4,                    // What's the width of the processing units
-  parameter int M = 4,                    // This is how much memory is supposed to be stored by buffer (TODO: currently we make it same as N, but will be different)
+  parameter int B_N = 2,                    // What's the width of the processing units
+  parameter int B_M = 2,                    // This is how much memory is supposed to be stored by buffer (TODO: currently we make it same as N, but will be different)
   
-  parameter int NUM_PROCESSORS_TO_BROADCAST = 4, // Assuming 4 processors in the same row / col. (with ID: 0, 1, 2, 3...)
+  parameter int B_NUM_PROCESSORS_TO_BROADCAST = 2, // Assuming 4 processors in the same row / col. (with ID: 0, 1, 2, 3...) (2^2)
   parameter int PROCESSORS_ID_COUNTER_BITS = 4, // Number of bits to record what ID to broadcast to
 
-  parameter int MEMORY_ADDRESS_BITS = 64  // Used to communicate with the memory
-  parameter int PARALLEL_DATA_STREAMING_SIZE = 4, // Memory can output 4 numbers at same time TODO: always divisor of SIZE...
-  parameter int MAX_MATRIX_LENGTH = 4096,  // Assume the max matrix we will do is 4k
+  parameter int B_MEMORY_ADDRESS_BITS = 6  // Used to communicate with the memory 2^6
+  parameter int B_PARALLEL_DATA_STREAMING_SIZE = 2, // Memory can output 4 numbers at same time (2^2) TODO: always divisor of SIZE...
+  parameter int B_MAX_MATRIX_LENGTH = 12,  // Assume the max matrix we will do is 4k (2^12)
+
+  parameter int N = 1 << B_N,                    // What's the width of the processing units
+  parameter int M = 1 << B_M,                    // This is how much memory is supposed to be stored by buffer (TODO: currently we make it same as N, but will be different)
+
+  parameter int NUM_PROCESSORS_TO_BROADCAST = 1 << B_NUM_PROCESSORS_TO_BROADCAST, // Assuming 4 processors in the same row / col. (with ID: 0, 1, 2, 3...)
+  
+  parameter int MEMORY_ADDRESS_BITS = 1 << B_MEMORY_ADDRESS_BITS  // Used to communicate with the memory
+  parameter int PARALLEL_DATA_STREAMING_SIZE = 1 << B_PARALLEL_DATA_STREAMING_SIZE, // Memory can output 4 numbers at same time TODO: always divisor of SIZE...
+  parameter int MAX_MATRIX_LENGTH = 1 << B_MAX_MATRIX_LENGTH,  // Assume the max matrix we will do is 4k
+
+
   parameter int COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH + 1), // We need to keep track of a count from 0 to MAX_MATRIX_LENGTH
   parameter int MEMORY_INPUT_COUNTER_BITS = $clog2(MAX_MATRIX_LENGTH * N + 1), // For reading from memory, we read at most MAX_MATRIX_LENGTH * N values
   parameter int REPEATS_COUNTER_BITS = $clog2((MAX_MATRIX_LENGTH/N) + 1) // keep track of how many full data repeats are sent. If we use this for B buffer, the value could become just 1 or 0... (probably keep the bit to a high value in case controller want to fast output A instead of B)

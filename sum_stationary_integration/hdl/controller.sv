@@ -407,7 +407,7 @@ module controller #(
   assign all_done = &output_buffer_ended;
   /*
   
-  ff
+  ff*/
 
 
 endmodule
