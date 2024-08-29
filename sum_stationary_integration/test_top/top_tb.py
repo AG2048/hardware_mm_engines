@@ -326,6 +326,13 @@ do sequence of tests:
 
 """
 
+"""
+Test Procedure:
+Set memory to specific value (or we can make a big memory and use different memory address)
+use LI writer to write addresses and lengths
+just wait for risingEdge "Done" then read from memory table and compare. 
+"""
+
 
 class MatrixMultiplierTester:
     """
