@@ -23,10 +23,14 @@ Reuse data that can be stored on-chip, reduce off-chip memory access
 ## Design Parameters
 
 ### Data Width Related Parameters
+These are parameters directly related to the input and output data width (number of bits to represent a fixed point value).
 
 #### DATA_WIDTH
+The number of bits in the input data, default to 8
 #### MULTIPLY_DATA_WIDTH
+The number of bits to preserve after multiplying 2 values, before adding values together. Default to `2 * DATA_WIDTH`
 #### ACCUM_DATA_WIDTH
+The number of additional bits to `MULTIPLY_DATA_WIDTH` that is required to store the result of accumulating multiplication results. Currently set to 16, so that the total output data width is `MULTIPLY_DATA_WIDTH + ACCUM_DATA_WIDTH = 32` bits. 
 
 ### Processor Sizes Related Parameters
 #### N
