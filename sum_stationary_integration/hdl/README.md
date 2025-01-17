@@ -242,3 +242,6 @@ processor_input_valid could have also just OR'd with if repeat count >= 1 or som
 
 ### memory_buffer
 It can probabably broadcast to ALL the processors with an indivisual ready/valid line to allow for parallel data streaming
+
+### State machine approach to controller
+^
