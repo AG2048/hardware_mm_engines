@@ -6,7 +6,7 @@ The design is made of the following major modules:
 3. `output_memory_writer.sv`
 4. `controller.sv`
 
-On a high level, the design shall receive 3 memory addresses: `a_memory_addr`, `b_memory_addr`, and `c_memory_addr`. Additionally, it receives  The design then takes the matrices stored at memory address `a_memory_addr` and `b_memory_addr` to perform matrix multiplication, and write the result at memory address `c_memory_addr`. 
+On a high level, the design shall receive 3 memory addresses: `a_memory_addr`, `b_memory_addr`, and `c_memory_addr`. Additionally, it receives `matrix_length_input` which denotes both matrix A and B are of size `matrix_length_input` by `matrix_length_input`.  The design then takes the matrices stored at memory address `a_memory_addr` and `b_memory_addr` to perform matrix multiplication, and write the result at memory address `c_memory_addr`. 
 
 The module consists of a grid of rows and cols of `processor` modules. There will be one `memory_buffer` per every row of `processor`, and there will be one `memory_buffer` per every col of processors. There will be one `output_memory_buffer` per `processor`. 
 
@@ -18,9 +18,30 @@ The `processor` module is fully controlled by the input it receives, and begins 
 It is expected that the input matrices are stored at address `a_memory_addr`, `b_memory_addr`. The output matrix should have sufficient space allocated
 
 ### Matrix A
-This matrix should be stored 
+This matrix should be stored in groups of "Row Blocks" from the top to the bottom. Each Row Block is an `N` by `matrix_length` matrix (short and wide). Each block is stored in the order of column-major order, beginning from the top right, moving left. 
+```
+1  2  3  4
+5  6  7  8
+9  10 11 12
+13 14 15 16
+```
+Should be stored in the order (assuming `N=2`):
+```
+4 8 3 7 2 6 1 5 12 16 11 15 10 14 8 13
+```
 
 ### Matrix B
+This matrix should be stored in groups of "Col Blocks" from the left to the right. Each Row Block is an `matrix_length` by `N` matrix (tall and thin). Each block is stored in the order of row-major order, beginning from the bottom left, moving up. 
+```
+1  2  3  4
+5  6  7  8
+9  10 11 12
+13 14 15 16
+```
+Should be stored in the order (assuming `N=2`):
+```
+13 14 9 10 5 6 1 2 15 16 11 12 7 8 3 4
+```
 
 ## Motivation
 
@@ -107,3 +128,8 @@ When using `MULTIPLY_DATA_WIDTH` and `ACCUM_DATA_WIDTH`, it may be beneficiary t
 
 ### Input Matrices Less Than Full Length
 Currently, it is assumed that `M` parameter is equal to the `N` parameter, meaning that the design will load and store the entire matrix row/col block onto the board. However, it may be possible to allow a row block or a col block to be sent in shorter segments and computes done in multiple accumulation cycles. 
+
+If `M != N` is implemented, then we might need to rework `memory_buffer` structure and the control signal that goes to it via `controller`. 
+
+### Figure out input shape
+Input shape may not be convenient as of this point, when corresponding to output shapes (there may be a few index reversal along the way?), so make the input buffer and output writer consistent in shape. 
