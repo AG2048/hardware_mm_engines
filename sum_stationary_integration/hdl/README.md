@@ -175,7 +175,15 @@ Once the data is loaded onto `output_streaming_registers`, `output_valid` signal
 #### Input / Output
 
 #### How it functions
-Receives instructions form the controller: what address to read from, how long is
+Receives instructions form the controller: what address to read from, how long is, and how many times this module should repeat broadcasting this data to all of its corresponding processors. 
+
+When received instructions, it keeps counter for each of those tasks, and decrement repeats counter if this clock cycle successfully wrote to the last processor for a given repeat. 
+
+Reading from memory uses the address input, `PARALLEL_DATA_STREAMING_SIZE` by `PARALLEL_DATA_STREAMING_SIZE` into an internal buffer.
+
+While the memory is being read, if enough memory has been read to cover for the next `N` values to stream, write those to `processor`. Write one by one to each processor by their ID (checking ID-specific ready, and assert the ID as a number along with the valid signal, we had to ensure the ID is set the same time as valid)
+
+Since the `processor` is not told the length of the array, the buffer will assert a `last` signal with the last number to tell the `processor` that this is the last value to receive and may begin processing
 
 ### Output Memory Writer
 #### Parameters
@@ -195,6 +203,9 @@ Receives instructions form the controller: what address to read from, how long i
 
 ### Incorrect definition of `M`
 `M` should be corresponding to matrix length, not `N` (in input buffers)
+
+### memory_buffer does not have ROW_ID / COL_ID implemented
+right now the processor_input_id output is not used, it could be just tied to the ID counter. 
 
 ## Edits / Improvements
 
@@ -220,3 +231,6 @@ Input shape may not be convenient as of this point, when corresponding to output
 
 ### output_streaming_registers
 could just for this to be row by row always. 
+
+### memory_buffer can be slightly optimized
+processor_input_valid could have also just OR'd with if repeat count >= 1 or something if that's efficient. 
