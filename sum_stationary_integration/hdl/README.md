@@ -104,7 +104,7 @@ Specifications for what matrix can be used as input, and how they would be read 
 #### M
 When reading matrix A, the design would load in the matrix in groups of `N` by `M` and matrix B in groups of `M` by `N`. So far, the implementation has only included the scenario where `M=matrix_length`. 
 
-This parameter should be a power of 2. 
+This parameter should be a power of 2. (Also `N` probably should be an integer multiple of `PARALLEL_DATA_STREAMING_SIZE`)
 #### MAX_MATRIX_LENGTH
 The maximum matrix size the design should be capable to compute. Used to allocate number of bits to store counters for matrix input / output.
 
@@ -147,12 +147,48 @@ Internal parameters by `controller` to keep track of which `output_memory_writer
 ## Modules Description
 
 ### Processor
+#### Parameters
+`DATA_WIDTH`, `N`, `MULTIPLY_DATA_WIDTH`, `ACCUM_DATA_WIDTH`, `PROCESSOR_ROWS_BITS`, `PROCESSOR_COLS_BITS` are standard parameters. 
+
+`ROW_ID`, `COL_ID` is a parameter given uniquely to each `processor` when instantiating a module. The module only receives `a_input` when the `COL_ID` matches, and only receives `b_input` when the `ROW_ID` matches. 
+#### Input / Output
+...
+
+#### How it functions
+While idle, receive row or col inputs separately into `input_delay_register`, begin passing the values into a systolic array regardless of if all data has been input or not. This requires both A and B input to be valid at the same time to ensure data is reached in the systolic array correctly. 
+
+Process (shift) the data already stored if: all inputs are ready and valid, or if the input is already done (just passing the residual values leftover in `input_delay_register`. However, DO NOT pass data if the result is valid, as this indicate the previous round of calculation is still stored in the systolic array. 
+
+Once the process is complete, `result_valid` will become true to indicate the result stored on the array is valid. This signal informs the `output_streaming_registers` to accept the value stored, so the result `N` by `N` matrix can be streamed out row by row. 
+
+Once the data is loaded onto `output_streaming_registers`, `output_valid` signal becomes true once there are something stored in the `output_streaming_registers`. The `processor` only resets on the edge of `result_valid` and `!output_valid` (when the computation finished and the result will be offloaded to the output module). The data remains on the systolic array while `output_valid` is true. 
+
+`output_streaming_registers` is an `N` by `N` grid of registers that stores the result of `processor` and stream them out row by row or col by col. It keeps track of how many rows it has streamed out to maintain record of how many rows it has left to stream. 
+
+`input_delay_register` is a staircase-like register structure that delays the input based on their row or col to allow for systolic-array computation. 
+
+`processing_unit` is a unit of the systolic array that multiplies North and West inputs and accumulates them. 
 
 ### Memory Buffer
+#### Parameters
+
+#### Input / Output
+
+#### How it functions
 
 ### Output Memory Writer
+#### Parameters
+
+#### Input / Output
+
+#### How it functions
 
 ### Controller
+#### Parameters
+
+#### Input / Output
+
+#### How it functions
 
 ## Bugs / Errors
 
@@ -175,3 +211,9 @@ Some calculated parameters such as `INPUT_BUFFER_COUNTER_BITS` might need to be 
 
 ### Figure out input shape
 Input shape may not be convenient as of this point, when corresponding to output shapes (there may be a few index reversal along the way?), so make the input buffer and output writer consistent in shape. 
+
+### Processor `last` input must be simultaneous
+`processor` should not have to hold up both row and col operations while waiting for them to input. Right now both input has to be simultaneous (maybe this is not resolveable due to the design of the processor)
+
+### output_streaming_registers
+could just for this to be row by row always. 
