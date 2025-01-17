@@ -100,21 +100,27 @@ This parameter should be a power of 2.
 The total number of `processor` modules in the design, mainly used to ID the output buffers. 
 
 ### Matrix Input Specifications
-Specifications for 
+Specifications for what matrix can be used as input, and how they would be read in. 
 #### M
+When reading matrix A, the design would load in the matrix in groups of `N` by `M` and matrix B in groups of `M` by `N`. So far, the implementation has only included the scenario where `M=matrix_length`. 
 
 This parameter should be a power of 2. 
 #### MAX_MATRIX_LENGTH
+The maximum matrix size the design should be capable to compute. Used to allocate number of bits to store counters for matrix input / output.
 
 This parameter should be a power of 2. 
 
-
 ### Memory Information
+Information about the external memory that will provide the design with information.
 #### MEMORY_ADDRESS_BITS
+The number of bits of memory address the memory have.
+
 #### MEMORY_SIZE 
+The total size of memory, this parameter is likely not used...
 
 not used, should be removed
 #### PARALLEL_DATA_STREAMING_SIZE
+Assume the memory can simultaneously write multiple values to the NoC, this parameter is the number of values that can be read to `memory_buffer` or `output_memory_writer` at the same time.
 
 This parameter should be a power of 2. 
 
