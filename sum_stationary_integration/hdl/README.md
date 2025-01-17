@@ -131,9 +131,17 @@ Mainly parameters calculated using other parameters, used to allocate bits. Does
 #### PROCESSOR_COLS_BITS
 #### INPUT_BUFFER_COUNTER_BITS
 `$clog2(MAX_MATRIX_LENGTH + 1)` Keeping track of how many cols of a row block or how many rows of a col block 
+May be subject to change from `M` implementation
 #### INPUT_BUFFER_MEMORY_INPUT_COUNTER_BITS
+`$clog2(MAX_MATRIX_LENGTH * N + 1)` Keeping track of total number of bits read from memory, used by `memory_buffer` to initialize counter
 #### INPUT_BUFFER_REPEATS_COUNTER_BITS
+`$clog2((MAX_MATRIX_LENGTH / N) + 1)` Each `memory_buffer` will repeat sending its stored data a certain number of times, this parameter stores the counter bits. 
 
+#### INPUT_BUFFER_INSTRUCTION_COUNTER_BITS 
+Internal parameters by `controller` to keep track of "which rows" to ask each `memory_buffer` to read from
+
+#### OUTPUT_BUFFER_INSTRUCTION_COUNTER_BITS 
+Internal parameters by `controller` to keep track of which `output_memory_writer` will write to what address. 
 
 
 ## Modules Description
