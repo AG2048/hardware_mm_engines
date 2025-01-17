@@ -20,3 +20,6 @@ The tests were done with:
 We can run by `make clean && make` to clear out the sim_build directory every re-run
 
 Also consider if we can get the waveform so we can better verify the results. 
+
+## Important Note:
+This test was completed with an older version of `processor`, which the input id not require IDs, if this test should be run again, make sure that we can simulate `ID=0`. 
