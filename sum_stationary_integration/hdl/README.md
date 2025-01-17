@@ -125,10 +125,12 @@ Assume the memory can simultaneously write multiple values to the NoC, this para
 This parameter should be a power of 2. 
 
 ### Calculated Parameter Bits Storage Parameters
+Mainly parameters calculated using other parameters, used to allocate bits. Does not need to be specified, as they are calculated directly. 
 #### MATRIX_LENGTH_BITS
 #### PROCESSOR_ROWS_BITS
 #### PROCESSOR_COLS_BITS
 #### INPUT_BUFFER_COUNTER_BITS
+`$clog2(MAX_MATRIX_LENGTH + 1)` Keeping track of how many cols of a row block or how many rows of a col block 
 #### INPUT_BUFFER_MEMORY_INPUT_COUNTER_BITS
 #### INPUT_BUFFER_REPEATS_COUNTER_BITS
 
@@ -144,6 +146,11 @@ This parameter should be a power of 2.
 
 ### Controller
 
+## Bugs / Errors
+
+### Incorrect definition of `M`
+`M` should be corresponding to matrix length, not `N`
+
 ## Edits / Improvements
 
 ### Output Bits Truncation
@@ -153,6 +160,8 @@ When using `MULTIPLY_DATA_WIDTH` and `ACCUM_DATA_WIDTH`, it may be beneficiary t
 Currently, it is assumed that `M` parameter is equal to the `N` parameter, meaning that the design will load and store the entire matrix row/col block onto the board. However, it may be possible to allow a row block or a col block to be sent in shorter segments and computes done in multiple accumulation cycles. 
 
 If `M != N` is implemented, then we might need to rework `memory_buffer` structure and the control signal that goes to it via `controller`. 
+
+Some calculated parameters such as `INPUT_BUFFER_COUNTER_BITS` might need to be revised due to reduced length
 
 ### Figure out input shape
 Input shape may not be convenient as of this point, when corresponding to output shapes (there may be a few index reversal along the way?), so make the input buffer and output writer consistent in shape. 
