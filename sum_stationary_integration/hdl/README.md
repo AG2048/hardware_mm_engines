@@ -14,7 +14,7 @@ The `controller` module informs the `memory_buffer` to fetch from memory row blo
 
 The `processor` module is fully controlled by the input it receives, and begins computing a smaller `N` by `N` portion of the output matrix. 
 
-## Input Specifications
+## Input/Output Specifications
 It is expected that the input matrices are stored at address `a_memory_addr`, `b_memory_addr`. The output matrix should have sufficient space allocated
 
 ### Matrix A
@@ -41,6 +41,23 @@ This matrix should be stored in groups of "Col Blocks" from the left to the righ
 Should be stored in the order (assuming `N=2`):
 ```
 13 14 9 10 5 6 1 2 15 16 11 12 7 8 3 4
+```
+
+### Matrix C
+This matrix will be stored in Groups of "Blocks" of `N` by `N` matrices. Each Group contains `ROWS_PROCESSORS` by `COLS_PROCESSORS` Blocks. The Groups are in row major order from top left to bottom right, The Blocks (within each group) are in row major order from top left to bottom right, and the matrices within each block are in row major order from top left to bottom right. 
+```
+1  2  3  4  5  6  7  8
+9  10 11 12 13 14 15 16
+17 18 19 20 21 22 23 24
+25 26 27 28 29 30 31 32
+33 34 35 36 37 38 39 40
+41 42 43 44 45 46 47 48
+49 50 51 52 53 54 55 56
+57 58 59 60 61 62 63 64
+```
+Assuming `N=2` `ROWS_PROCESSORS=2` `ROWS_PROCESSORS=2`:
+```
+1 2 9 10 3 4 11 12 17 18 25 26 19 20 27 28 5 6 13 14 7 8 15 16 21 22 29 30 23 24 31 32 33 34 41 42 35 36 43 44 49 50 57 58 51 52 59 60 37 38 45 46 39 40 47 48 53 54 61 62 55 56 63 64
 ```
 
 ## Motivation
