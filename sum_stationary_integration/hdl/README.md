@@ -175,6 +175,7 @@ Once the data is loaded onto `output_streaming_registers`, `output_valid` signal
 #### Input / Output
 
 #### How it functions
+Receives instructions form the controller: what address to read from, how long is
 
 ### Output Memory Writer
 #### Parameters
@@ -193,7 +194,7 @@ Once the data is loaded onto `output_streaming_registers`, `output_valid` signal
 ## Bugs / Errors
 
 ### Incorrect definition of `M`
-`M` should be corresponding to matrix length, not `N`
+`M` should be corresponding to matrix length, not `N` (in input buffers)
 
 ## Edits / Improvements
 
@@ -208,6 +209,8 @@ If `M != N` is implemented, then we might need to rework `memory_buffer` structu
 Some calculated parameters such as `INPUT_BUFFER_COUNTER_BITS` might need to be revised due to reduced length
 
 `M` could be redefined to be the number of multiples of `N` each buffer should read, and set `M*N*N` as the buffer size, and only read up to `M*N*N` numbers at once, but could stop early if no more number is to be read. 
+
+**It is possible to not modify the M parameter, and instead let controller tell an effective `M` to the memory_buffer as the matrix_length**
 
 ### Figure out input shape
 Input shape may not be convenient as of this point, when corresponding to output shapes (there may be a few index reversal along the way?), so make the input buffer and output writer consistent in shape. 
