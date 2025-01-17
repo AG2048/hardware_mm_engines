@@ -239,3 +239,6 @@ could just for this to be row by row always.
 
 ### memory_buffer can be slightly optimized
 processor_input_valid could have also just OR'd with if repeat count >= 1 or something if that's efficient. 
+
+### memory_buffer
+It can probabably broadcast to ALL the processors with an indivisual ready/valid line to allow for parallel data streaming
