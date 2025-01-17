@@ -191,6 +191,7 @@ Since the `processor` is not told the length of the array, the buffer will asser
 #### Input / Output
 
 #### How it functions
+To a certain degree, undecided. This could just receive a signal from controller telling its address to store, and it will inform the controller it's finished so it may receive a new address. Once the address is stored, it remains in idle state until the processor gives it the output data. 
 
 ### Controller
 #### Parameters
@@ -198,6 +199,10 @@ Since the `processor` is not told the length of the array, the buffer will asser
 #### Input / Output
 
 #### How it functions
+Receives the begin processing instruction.
+Assigns address and matrix length to input buffer and output writers. 
+Re-assign new address when the buffer/writer completed its previous task. Requires some soft logic / a lot of calculations. 
+Informs the completion of all computations via a done flag. 
 
 ## Bugs / Errors
 
