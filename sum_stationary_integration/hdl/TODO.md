@@ -88,3 +88,6 @@ Now I have some concern regarding the program using division as an operator. An 
   - By this i mean:
     - for A: first row tile last col -> first row tile 2nd last col -> ... first row tile first col -> second row tile last col...
     - for B: first col tile last row... first col tile first row...
+
+## Simplified B input memory buffer
+if it does not need data "repeats", it might as well just be a small buffer of size `N` to save space
