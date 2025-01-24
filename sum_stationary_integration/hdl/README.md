@@ -245,3 +245,5 @@ It can probabably broadcast to ALL the processors with an indivisual ready/valid
 
 ### State machine approach to controller
 ^
+### Simplified B input memory buffer
+if it does not need data "repeats", it might as well just be a small buffer of size `N` to save space
