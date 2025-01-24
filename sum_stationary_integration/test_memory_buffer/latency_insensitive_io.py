@@ -16,6 +16,22 @@ from cocotb.triggers import RisingEdge, First
 # Data reader - that asserts ready when instructed to start read data, not ready when stop. Checks for valid signals before reading.
 #   reader(ready=True/False) - and it logs whatever value it read
 class LIReader:
+    """
+    Class: LIReader
+    Purpose: Read data from the DUT.
+    How to use:
+        1. Initialize the class with:
+            - dut: the DUT handle (not really used)
+            - clk: the clock handle
+            - signals: a dict of signal handles that will be read from (do signals['signal_name'].value) or just use the _sample() method
+                In the memory buffer case, the signals would be: processor_id, processor_input_data, last. 
+                Do note that the "B" input buffers kinda does not need the "last" signal, but we are just testing the overall functionality.
+            - valid: the handle to the valid signal
+            - ready: the handle to the ready signal
+                Note that one LI Reader is meant to serve as one processor unit. So to test broadcasting, we need multiple LI Readers.
+        2. Call start() to start the monitor
+        3. simply read from self.values to get the data that was read.
+    """
     def __init__(self, dut: SimHandleBase, clk: SimHandleBase, signals: Dict[str, SimHandleBase], valid: SimHandleBase, ready: SimHandleBase):
         self.values = Queue[Dict[str, int]]()  # {'signal_name': value}, signals=dict(c_data_streaming=self.dut.c_data_streaming),
         self._dut = dut
@@ -66,19 +82,36 @@ class LIReader:
         """
         return {name: handle.value for name, handle in self._signals.items()}
 
-# Data writer - asserts valid when prepared,
-#   writer(valid=True/False, value)
+
 class LIWriter:
-    def __init__(self, dut: SimHandleBase, clk: SimHandleBase, signals: SimHandleBase, valid: SimHandleBase, ready: SimHandleBase, last: SimHandleBase, sends_last: bool, input_length: int):
+    """
+    Class: LIWriter
+    Purpose: Write data to the DUT.
+    How to use: 
+        1. Initialize the class with:
+            - dut: the DUT handle (not really used)
+            - clk: the clock handle
+            - signals: the handle to the signals that will be written to (do signals.value = whatever we want to write)
+                (Can create multiple signals handle for different wires)
+            - valid: the handle to the valid signal
+            - ready: the handle to the ready signal
+        2. Call start() to start the monitor
+        3. Instruct data to be written:
+            - set_status(data, valid=True/False)
+            - This will store the data and valid signals to a queue. 
+            - If valid is True, it will wait until ready signal and write the corresponding data
+            - If valid is False, it will wait for a random number of cycles with the data.
+            - If the queue is empty, it will write 0s with valid=False
+    """
+    def __init__(self, dut: SimHandleBase, clk: SimHandleBase, address_input_signal: SimHandleBase, length_input_signal: SimHandleBase, repeats_input_signal: SimHandleBase, valid: SimHandleBase, ready: SimHandleBase):
         self.values = Queue[Tuple[int, bool, bool]]()
         self._dut = dut
         self._clk = clk
-        self._signals = signals
+        self._address_input_signal = address_input_signal
+        self._length_input_signal = length_input_signal
+        self._repeats_input_signal = repeats_input_signal
         self._valid = valid
         self._ready = ready
-        self._last = last
-        self._sends_last = sends_last
-        self._input_length = input_length
         self._coro = None
 
     def start(self) -> None:
@@ -97,13 +130,10 @@ class LIWriter:
     def set_status(self, input_data_and_valid):
         """
         input_data_and_valid would be tuples:
-        ([data...], True),
+        ([int address, int length, int repeats], Bool valid),
         symbolize the data it will be displaying at each clock edge. 
         True data will wait until ready to be delivered.
         False data will remain false for 1 clock edge
-
-        (added last boolean to be the "last" signal)
-        ([data...], valid, last)
         """
         self.values.put_nowait(input_data_and_valid)
 
@@ -113,19 +143,17 @@ class LIWriter:
         """
         # Initialize the input values. 
         if self.values.empty():
-            input_value, do_input, is_last = [0 for _ in range(self._input_length)], False, False
+            input_value, do_input = [0, 0, 0], False
         else:
-            input_value, do_input, is_last = await self.values.get()
+            input_value, do_input = await self.values.get()
         
         while True:
             # Set signals to our values.
-            self._signals.value = input_value
+            self._address_input_signal.value = input_value[0]
+            self._length_input_signal.value = input_value[1]
+            self._repeats_input_signal.value = input_value[2]
             self._valid.value = do_input
 
-            # If this writer does send the "last" signal, then we set the last signal. 
-            if self._sends_last:
-                self._last.value = is_last
-            
             # if we are sending valid data, we are waiting for clock edge and ready signal. 
             if do_input:
                 # We are writing
@@ -149,10 +177,10 @@ class LIWriter:
                     await RisingEdge(self._clk)
 
             if self.values.empty():
-                input_value, do_input, is_last = [0 for _ in range(self._input_length)], False, False
+                input_value, do_input = [0, 0, 0], False
             else:
                 # try:
-                input_value, do_input, is_last = await self.values.get()
+                input_value, do_input = await self.values.get()
                 # except Exception as e:
                 #     print(f"An error occurred: {e}")
                 #     raise Exception(str(self.values.get()))
