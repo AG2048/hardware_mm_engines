@@ -98,7 +98,7 @@ module memory_buffer #(
    ********************/
   // Read from memory as long as we are operating. Only read until counter reaches length of values we need to read. 
   logic [MEMORY_INPUT_COUNTER_BITS-1:0] memory_reading_counter; // to count if we have read enough data from memory (always represent number of values written in buffer)
-  logic [DATA_WIDTH-1:0] memory_buffer_registers[M * N - 1 : 0]; // Flat buffer, we send memory_buffer_registers[N * (i+1) - 1 : N * i]
+  logic [DATA_WIDTH-1:0] memory_buffer_registers[MAX_MATRIX_LEN * N - 1 : 0]; // Flat buffer, we send memory_buffer_registers[N * (i+1) - 1 : N * i]
   // We don't need to clear the memory registers on reset, just have to not access it
   always_ff @(posedge clk) begin : read_from_memory
     if (reset) begin
